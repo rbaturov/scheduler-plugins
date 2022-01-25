@@ -80,6 +80,10 @@ autogen: update-vendor
 integration-test: install-etcd autogen
 	hack/integration-test.sh
 
+.PHONY: integration-test-quick
+integration-test-quick: install-etcd autogen
+	hack-kni/integration-test-quick.sh
+
 .PHONY: verify-gofmt
 verify-gofmt:
 	hack/verify-gofmt.sh
