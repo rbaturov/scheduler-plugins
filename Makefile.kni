@@ -54,7 +54,7 @@ build-noderesourcetopology-plugin.amd64: autogen
 
 .PHONY: local-noderesourcetopology-image
 local-noderesourcetopology-image: clean
-	docker build -f ./build/noderesourcetopology-plugin/Dockerfile --build-arg ARCH="amd64" --build-arg RELEASE_VERSION="$(RELEASE_VERSION)" -t $(LOCAL_REGISTRY)/$(LOCAL_IMAGE) .
+	podman build -f ./build/noderesourcetopology-plugin/Dockerfile --build-arg ARCH="amd64" --build-arg RELEASE_VERSION="$(RELEASE_VERSION)" -t $(LOCAL_REGISTRY)/$(LOCAL_IMAGE) .
 
 .PHONY: update-vendor
 update-vendor:
