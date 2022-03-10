@@ -39,12 +39,7 @@ jobs:
       - name: Set up golang
         uses: actions/setup-go@v2
         with:
-          go-version: 1.16
-
-      - name: Install etcd
-        run: |
-          make -f ${MAKEFILE_PATH} install-etcd
-          export PATH=$(pwd)/etcd:${PATH}
+          go-version: 1.17
 
       - name: Run integration test
         run:

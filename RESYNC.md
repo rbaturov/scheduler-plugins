@@ -41,8 +41,9 @@ For the sake of transparency, for every resync process we should update the foll
 
 | Resync Date | Merge With Upstream Tag/Commit                                                                       | Author    |
 |-------------|------------------------------------------------------------------------------------------------------|-----------|
-| 01.21.2022  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/ec632c3d7e04b7b372f9a6f4338b0dbc53ef3d46 | fromanirh }
-| 12.23.2021  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/7cf6512bd726f0d30b2ab32443af867a0b849da8 | fromanirh |
-| 12.11.2021  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/b8d13e17a3e1f633d72d71276a3da6fecf89f2e3 | Tal-or    |
+| 2022.03.10  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/2b3439076c54579c3ecdacfc71ca00a23f1e42f8 | fromanirh |
+| 2022.01.21  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/ec632c3d7e04b7b372f9a6f4338b0dbc53ef3d46 | fromanirh |
+| 2021.12.23  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/7cf6512bd726f0d30b2ab32443af867a0b849da8 | fromanirh |
+| 2021.12.11  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/b8d13e17a3e1f633d72d71276a3da6fecf89f2e3 | Tal-or    |
 
 The newest resync should appear in the first row. 

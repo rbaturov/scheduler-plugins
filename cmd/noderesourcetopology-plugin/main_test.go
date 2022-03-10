@@ -32,7 +32,7 @@ import (
 
 	"k8s.io/kubernetes/cmd/kube-scheduler/app"
 	"k8s.io/kubernetes/cmd/kube-scheduler/app/options"
-	kubeschedulerconfig "k8s.io/kubernetes/pkg/scheduler/apis/config"
+	"k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config/testing/defaults"
 
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology"
@@ -80,7 +80,7 @@ users:
 	// NodeResourceTopologyMatch plugin config
 	nodeResourceTopologyMatchConfigWithArgsFile := filepath.Join(tmpDir, "nodeResourceTopologyMatch.yaml")
 	if err := ioutil.WriteFile(nodeResourceTopologyMatchConfigWithArgsFile, []byte(fmt.Sprintf(`
-apiVersion: kubescheduler.config.k8s.io/v1beta2
+apiVersion: kubescheduler.config.k8s.io/v1beta3
 kind: KubeSchedulerConfiguration
 clientConnection:
   kubeconfig: "%s"
@@ -103,7 +103,7 @@ profiles:
 	// Node Resource Topology profiles config
 	nrtProfilesConfig := filepath.Join(tmpDir, "multi-profiles.yaml")
 	if err := ioutil.WriteFile(nrtProfilesConfig, []byte(fmt.Sprintf(`
-apiVersion: kubescheduler.config.k8s.io/v1beta2
+apiVersion: kubescheduler.config.k8s.io/v1beta3
 kind: KubeSchedulerConfiguration
 clientConnection:
   kubeconfig: "%s"
@@ -134,32 +134,32 @@ profiles:
 		name            string
 		flags           []string
 		registryOptions []app.Option
-		wantPlugins     map[string]*kubeschedulerconfig.Plugins
+		wantPlugins     map[string]*config.Plugins
 	}{
 		{
 			name: "default config",
 			flags: []string{
 				"--kubeconfig", configKubeconfig,
 			},
-			wantPlugins: map[string]*kubeschedulerconfig.Plugins{
-				"default-scheduler": defaults.PluginsV1beta2,
+			wantPlugins: map[string]*config.Plugins{
+				"default-scheduler": defaults.ExpandedPluginsV1beta3,
 			},
 		},
 		{
 			name:            "single profile config - NodeResourceTopologyMatch with args",
 			flags:           []string{"--config", nodeResourceTopologyMatchConfigWithArgsFile},
 			registryOptions: []app.Option{app.WithPlugin(noderesourcetopology.Name, noderesourcetopology.New)},
-			wantPlugins: map[string]*kubeschedulerconfig.Plugins{
+			wantPlugins: map[string]*config.Plugins{
 				"default-scheduler": {
-					QueueSort:  defaults.PluginsV1beta2.QueueSort,
-					Bind:       defaults.PluginsV1beta2.Bind,
-					PreFilter:  defaults.PluginsV1beta2.PreFilter,
-					Filter:     kubeschedulerconfig.PluginSet{Enabled: []kubeschedulerconfig.Plugin{{Name: noderesourcetopology.Name}}},
-					PostFilter: defaults.PluginsV1beta2.PostFilter,
-					PreScore:   defaults.PluginsV1beta2.PreScore,
-					Score:      kubeschedulerconfig.PluginSet{Enabled: []kubeschedulerconfig.Plugin{{Name: noderesourcetopology.Name, Weight: 1}}},
-					Reserve:    defaults.PluginsV1beta2.Reserve,
-					PreBind:    defaults.PluginsV1beta2.PreBind,
+					QueueSort:  defaults.ExpandedPluginsV1beta3.QueueSort,
+					Bind:       defaults.ExpandedPluginsV1beta3.Bind,
+					PreFilter:  defaults.ExpandedPluginsV1beta3.PreFilter,
+					Filter:     config.PluginSet{Enabled: []config.Plugin{{Name: noderesourcetopology.Name}}},
+					PostFilter: defaults.ExpandedPluginsV1beta3.PostFilter,
+					PreScore:   defaults.ExpandedPluginsV1beta3.PreScore,
+					Score:      config.PluginSet{Enabled: []config.Plugin{{Name: noderesourcetopology.Name, Weight: 1}}},
+					Reserve:    defaults.ExpandedPluginsV1beta3.Reserve,
+					PreBind:    defaults.ExpandedPluginsV1beta3.PreBind,
 				},
 			},
 		},
@@ -177,12 +177,9 @@ profiles:
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			fs := pflag.NewFlagSet("test", pflag.PanicOnError)
-			opts, err := options.NewOptions()
-			if err != nil {
-				t.Fatal(err)
-			}
+			opts := options.NewOptions()
 
-			nfs := opts.Flags()
+			nfs := opts.Flags
 			for _, f := range nfs.FlagSets {
 				fs.AddFlagSet(f)
 			}
@@ -190,17 +187,9 @@ profiles:
 				t.Fatal(err)
 			}
 
-			if err := opts.Complete(&nfs); err != nil {
-				t.Fatal(err)
-			}
-
 			// use listeners instead of static ports so parallel test runs don't conflict
 			opts.SecureServing.Listener = makeListener(t)
 			defer opts.SecureServing.Listener.Close()
-			opts.CombinedInsecureServing.Metrics.Listener = makeListener(t)
-			defer opts.CombinedInsecureServing.Metrics.Listener.Close()
-			opts.CombinedInsecureServing.Healthz.Listener = makeListener(t)
-			defer opts.CombinedInsecureServing.Healthz.Listener.Close()
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -209,7 +198,7 @@ profiles:
 				t.Fatal(err)
 			}
 
-			gotPlugins := make(map[string]*kubeschedulerconfig.Plugins)
+			gotPlugins := make(map[string]*config.Plugins)
 			for n, p := range sched.Profiles {
 				gotPlugins[n] = p.ListPlugins()
 			}
