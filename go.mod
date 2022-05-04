@@ -3,6 +3,7 @@ module sigs.k8s.io/scheduler-plugins
 go 1.17
 
 require (
+	github.com/dustin/go-humanize v1.0.0
 	github.com/google/go-cmp v0.5.5
 	github.com/k8stopologyawareschedwg/noderesourcetopology-api v0.0.12
 	github.com/patrickmn/go-cache v2.1.0+incompatible
@@ -109,6 +110,7 @@ require (
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
 	golang.org/x/tools v0.1.6-0.20210820212750-d4cc65f0b2ff // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
+	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20210831024726-fe130286e0e2 // indirect
 	google.golang.org/grpc v1.40.0 // indirect
