@@ -44,3 +44,14 @@ jobs:
       - name: Run integration test
         run:
           make -f ${MAKEFILE_PATH} integration-test-quick
+
+  vendor-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Verify vendoring
+        run: ./hack-kni/verify-vendoring.sh
