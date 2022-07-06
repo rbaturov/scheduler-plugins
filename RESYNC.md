@@ -41,6 +41,7 @@ For the sake of transparency, for every resync process we should update the foll
 
 | Resync Date | Merge With Upstream Tag/Commit                                                                       | Author    |
 |-------------|------------------------------------------------------------------------------------------------------|-----------|
+| 2022.07.06  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/6aadda4e9213fd0f71807cd6630eb8e58db740fd | swatisehgal |
 | 2022.06.29  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/843d47374bba691f13558806e8fddb866bfb1b9e | swatisehgal |
 | 2022.06.23  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/54bd848cd75ce5c0b6953733b0e477c47aa356a9 | swatisehgal |
 | 2022.05.03  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/7a6dcdc99b1ee9a324823eaf98718cfd9e98e805 | fromanirh |
