@@ -1,6 +1,6 @@
 module sigs.k8s.io/scheduler-plugins
 
-go 1.18
+go 1.19
 
 require (
 	github.com/dustin/go-humanize v1.0.0
