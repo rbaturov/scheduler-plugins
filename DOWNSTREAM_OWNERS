@@ -3,6 +3,6 @@
 filters:
   ".*":
     reviewers:
-      - performance-reviewers
+      - kni-scheduler-reviewers
     approvers:
-      - performance-approvers
+      - kni-scheduler-approvers
