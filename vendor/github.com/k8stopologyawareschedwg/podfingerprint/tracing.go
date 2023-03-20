@@ -103,6 +103,17 @@ func (st Status) Repr() string {
 	return sb.String()
 }
 
+func (st Status) Clone() Status {
+	pods := make([]NamespacedName, len(st.Pods))
+	copy(pods, st.Pods)
+	ret := Status{
+		FingerprintExpected: st.FingerprintExpected,
+		FingerprintComputed: st.FingerprintComputed,
+		Pods:                pods,
+	}
+	return ret
+}
+
 type TracingFingerprint struct {
 	Fingerprint
 	tracer Tracer
