@@ -1,5 +1,14 @@
 # Developer guide
 
+## Table of Contents
+
+<!-- toc -->
+- [How to build](#how-to-build)
+- [How to debug](#how-to-debug)
+- [How to start](#how-to-start)
+- [Before submitting](#before-submitting)
+<!-- /toc -->
+
 ## How to build
 
 This section is about building on the local host, e.g. for debug purpose.
@@ -32,7 +41,7 @@ make autogen
 command.
 
 ## How to debug
-By default debug information is stripped, to keep it in the binary you need to remove -w command line option from
+By default, debug information is stripped, to keep it in the binary you need to remove -w command line option from
 ldflags in the Makefile.
 You can run all unit tests by **make unit-test** command or if you would like to run exact unit test
 ```shell
