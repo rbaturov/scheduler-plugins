@@ -31,7 +31,6 @@ import (
 	"k8s.io/client-go/informers"
 	testClientSet "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/defaultbinder"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/queuesort"
@@ -549,7 +548,7 @@ func BenchmarkNetworkOverheadPreFilter(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				// Prefilter
-				if _, got := pl.PreFilter(nil, state, tt.pod); got.Code() != tt.expected {
+				if _, got := pl.PreFilter(context.TODO(), state, tt.pod); got.Code() != tt.expected {
 					b.Errorf("expected %v, got %v : %v", tt.expected, got.Code(), got.Message())
 					assert.True(b, got.IsSuccess())
 				}
@@ -771,7 +770,7 @@ func TestNetworkOverheadScore(t *testing.T) {
 
 			for _, n := range nodes {
 				// Prefilter
-				if _, got := pl.PreFilter(nil, state, tt.pod); got.Code() != tt.expected {
+				if _, got := pl.PreFilter(context.TODO(), state, tt.pod); got.Code() != tt.expected {
 					t.Errorf("expected %v, got %v : %v", tt.expected, got.Code(), got.Message())
 				}
 
@@ -1018,7 +1017,7 @@ func BenchmarkNetworkOverheadScore(b *testing.B) {
 			}
 
 			// Prefilter
-			if _, got := pl.PreFilter(nil, state, tt.pod); got.Code() != tt.expected {
+			if _, got := pl.PreFilter(context.TODO(), state, tt.pod); got.Code() != tt.expected {
 				b.Errorf("expected %v, got %v : %v", tt.expected, got.Code(), got.Message())
 			}
 
@@ -1094,7 +1093,7 @@ func TestNetworkOverheadFilter(t *testing.T) {
 			networkTopology: networkTopology,
 			pod:             makePod("p1", "p1-deployment", 0, "basic", nil, nil),
 			nodes:           nodes,
-			wantStatus:      framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-1 does not meet several network requirements from Workload dependencies: Satisfied: 0 Violated: 1")),
+			wantStatus:      framework.NewStatus(framework.Unschedulable, "Node n-1 does not meet several network requirements from Workload dependencies: Satisfied: 0 Violated: 1"),
 			nodeToFilter:    nodes[0],
 			pods:            pods,
 			expected:        framework.Success,
@@ -1118,7 +1117,7 @@ func TestNetworkOverheadFilter(t *testing.T) {
 			networkTopology: networkTopology,
 			pod:             makePod("p2", "p2-deployment", 0, "basic", nil, nil),
 			nodes:           nodes,
-			wantStatus:      framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-5 does not meet several network requirements from Workload dependencies: Satisfied: 0 Violated: 1")),
+			wantStatus:      framework.NewStatus(framework.Unschedulable, "Node n-5 does not meet several network requirements from Workload dependencies: Satisfied: 0 Violated: 1"),
 			nodeToFilter:    nodes[4],
 			pods:            pods,
 			expected:        framework.Success,
@@ -1166,7 +1165,7 @@ func TestNetworkOverheadFilter(t *testing.T) {
 			networkTopology: networkTopology,
 			pod:             makePod("p1", "p1-deployment", 0, "basic", nil, nil),
 			nodes:           nodes,
-			wantStatus:      framework.NewStatus(framework.Unschedulable, fmt.Sprintf("Node n-1 does not meet several network requirements from Workload dependencies: Satisfied: 0 Violated: 1")),
+			wantStatus:      framework.NewStatus(framework.Unschedulable, "Node n-1 does not meet several network requirements from Workload dependencies: Satisfied: 0 Violated: 1"),
 			nodeToFilter:    nodes[0],
 			pods:            pods,
 			expected:        framework.Success,
@@ -1247,7 +1246,7 @@ func TestNetworkOverheadFilter(t *testing.T) {
 			state := framework.NewCycleState()
 
 			// Prefilter
-			if _, got := pl.PreFilter(nil, state, tt.pod); got.Code() != tt.expected {
+			if _, got := pl.PreFilter(context.TODO(), state, tt.pod); got.Code() != tt.expected {
 				t.Errorf("expected %v, got %v : %v", tt.expected, got.Code(), got.Message())
 			}
 
@@ -1473,7 +1472,7 @@ func BenchmarkNetworkOverheadFilter(b *testing.B) {
 			state := framework.NewCycleState()
 
 			// Prefilter
-			if _, got := pl.PreFilter(nil, state, tt.pod); got.Code() != tt.expected {
+			if _, got := pl.PreFilter(context.TODO(), state, tt.pod); got.Code() != tt.expected {
 				b.Errorf("expected %v, got %v : %v", tt.expected, got.Code(), got.Message())
 			}
 
@@ -1610,15 +1609,4 @@ func makePodAllocated(selector string, podName string, hostname string, priority
 			},
 		},
 	}
-}
-
-// podScheduled returns true if a node is assigned to the given pod.
-func podScheduled(c *testClientSet.Clientset, podNamespace, podName string) bool {
-	pod, err := c.CoreV1().Pods(podNamespace).Get(context.TODO(), podName, metav1.GetOptions{})
-	if err != nil {
-		// This could be a connection error so we want to retry.
-		klog.ErrorS(err, "Failed to get pod", "pod", klog.KRef(podNamespace, podName))
-		return false
-	}
-	return pod.Spec.NodeName != ""
 }

@@ -57,7 +57,7 @@ func TestSetup(t *testing.T) {
 	// https server
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"metadata": {"name": "test"}}`))
 	}))
 	defer server.Close()
@@ -507,9 +507,6 @@ profiles:
 						Enabled: append(defaults.ExpandedPluginsV1.Reserve.Enabled, config.Plugin{Name: coscheduling.Name}),
 					},
 					PreBind: defaults.ExpandedPluginsV1.PreBind,
-					PostBind: config.PluginSet{
-						Enabled: append(defaults.ExpandedPluginsV1.PostBind.Enabled, config.Plugin{Name: coscheduling.Name}),
-					},
 				},
 			},
 		},
