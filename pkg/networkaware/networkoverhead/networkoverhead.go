@@ -182,16 +182,10 @@ func (no *NetworkOverhead) PreFilter(ctx context.Context, state *framework.Cycle
 	}
 
 	// Get AppGroup CR
-	appGroup, err := no.findAppGroupNetworkOverhead(agName)
-	if err != nil {
-		return nil, framework.NewStatus(framework.Success, "Error while returning AppGroup, return")
-	}
+	appGroup := no.findAppGroupNetworkOverhead(agName)
 
 	// Get NetworkTopology CR
-	networkTopology, err := no.findNetworkTopologyNetworkOverhead()
-	if err != nil {
-		return nil, framework.NewStatus(framework.Success, "Error while returning NetworkTopology, return")
-	}
+	networkTopology := no.findNetworkTopologyNetworkOverhead()
 
 	// Sort Costs if manual weights were selected
 	no.sortNetworkTopologyCosts(networkTopology)
@@ -334,7 +328,7 @@ func (no *NetworkOverhead) Filter(ctx context.Context, cycleState *framework.Cyc
 	// Get satisfied and violated number of dependencies
 	satisfied := preFilterState.satisfiedMap[nodeInfo.Node().Name]
 	violated := preFilterState.violatedMap[nodeInfo.Node().Name]
-	klog.V(6).InfoS("Number of dependencies", "satisfied", satisfied, "violated", violated)
+	klog.V(6).InfoS("Number of dependencies:", "satisfied", satisfied, "violated", violated)
 
 	// The pod is filtered out if the number of violated dependencies is higher than the satisfied ones
 	if violated > satisfied {
@@ -352,7 +346,7 @@ func (no *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 	preFilterState, err := getPreFilterState(cycleState)
 	if err != nil {
 		klog.ErrorS(err, "Failed to read preFilterState from cycleState", "preFilterStateKey", preFilterStateKey)
-		return score, framework.NewStatus(framework.Error, fmt.Sprintf("not eligible due to failed to read from cycleState, return min score"))
+		return score, framework.NewStatus(framework.Error, "not eligible due to failed to read from cycleState, return min score")
 	}
 
 	// If scoreEqually, return minScore
@@ -362,8 +356,7 @@ func (no *NetworkOverhead) Score(ctx context.Context, cycleState *framework.Cycl
 
 	// Return Accumulated Cost as score
 	score = preFilterState.finalCostMap[nodeName]
-
-	klog.V(4).InfoS("pod:%s; node:%s; finalScore=%d", pod.GetName(), nodeName, score)
+	klog.V(4).InfoS("Score:", "pod", pod.GetName(), "node", nodeName, "finalScore", score)
 	return score, framework.NewStatus(framework.Success, "Accumulated cost added as score, normalization ensures lower costs are favored")
 }
 
@@ -605,7 +598,7 @@ func getPreFilterState(cycleState *framework.CycleState) (*PreFilterState, error
 	no, err := cycleState.Read(preFilterStateKey)
 	if err != nil {
 		// preFilterState doesn't exist, likely PreFilter wasn't invoked.
-		return nil, fmt.Errorf("error reading %q from cycleState: %v", preFilterStateKey, err)
+		return nil, fmt.Errorf("error reading %q from cycleState: %w", preFilterStateKey, err)
 	}
 
 	state, ok := no.(*PreFilterState)
@@ -615,39 +608,36 @@ func getPreFilterState(cycleState *framework.CycleState) (*PreFilterState, error
 	return state, nil
 }
 
-func (no *NetworkOverhead) findAppGroupNetworkOverhead(agName string) (*agv1alpha1.AppGroup, error) {
+func (no *NetworkOverhead) findAppGroupNetworkOverhead(agName string) *agv1alpha1.AppGroup {
 	klog.V(6).InfoS("namespaces: %s", no.namespaces)
-	var err error
 	for _, namespace := range no.namespaces {
-		klog.V(6).InfoS("ag.lister: %v", no.agLister)
-
+		klog.V(6).InfoS("appGroup CR", "namespace", namespace, "ag.lister", no.agLister)
 		// AppGroup could not be placed in several namespaces simultaneously
 		appGroup, err := no.agLister.AppGroups(namespace).Get(agName)
 		if err != nil {
-			klog.V(4).InfoS("Cannot get AppGroup from AppGroupNamespaceLister: %v", err)
+			klog.V(4).InfoS("Cannot get AppGroup from AppGroupNamespaceLister:", "error", err)
 			continue
 		}
 		if appGroup != nil {
-			return appGroup, nil
+			return appGroup
 		}
 	}
-	return nil, err
+	return nil
 }
 
-func (no *NetworkOverhead) findNetworkTopologyNetworkOverhead() (*ntv1alpha1.NetworkTopology, error) {
+func (no *NetworkOverhead) findNetworkTopologyNetworkOverhead() *ntv1alpha1.NetworkTopology {
 	klog.V(6).InfoS("namespaces: %s", no.namespaces)
-	var err error
 	for _, namespace := range no.namespaces {
-		klog.V(6).InfoS("nt.lister: %v", no.ntLister)
+		klog.V(6).InfoS("networkTopology CR:", "namespace", namespace, "nt.lister", no.ntLister)
 		// NetworkTopology could not be placed in several namespaces simultaneously
 		networkTopology, err := no.ntLister.NetworkTopologies(namespace).Get(no.ntName)
 		if err != nil {
-			klog.V(4).InfoS("Cannot get networkTopology from networkTopologyNamespaceLister: %v", err)
+			klog.V(4).InfoS("Cannot get networkTopology from networkTopologyNamespaceLister:", "error", err)
 			continue
 		}
 		if networkTopology != nil {
-			return networkTopology, nil
+			return networkTopology
 		}
 	}
-	return nil, err
+	return nil
 }

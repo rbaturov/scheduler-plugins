@@ -147,8 +147,15 @@ type NodeResourceTopologyMatchArgs struct {
 
 	// ScoringStrategy a scoring model that determine how the plugin will score the nodes.
 	ScoringStrategy *ScoringStrategy `json:"scoringStrategy,omitempty"`
-	// If > 0, enables the caching facilities of the reserve plugin - which must be enabled
+	// CacheResyncPeriodSeconds sets the resync period, in seconds, between the internal
+	// NodeResourceTopoology cache and the apiserver. If present and greater than zero,
+	// implicitely enables the caching. If zero, disables the caching entirely.
+	// If the cache is enabled, the Reserve plugin must be enabled.
 	CacheResyncPeriodSeconds *int64 `json:"cacheResyncPeriodSeconds,omitempty"`
+	// if set to true, exclude node from scheduling if there are any reserved pods for given node
+	// this option takes precedence over CacheResyncPeriodSeconds
+	// if DiscardReservedNodes is enabled, CacheResyncPeriodSeconds option is noop
+	DiscardReservedNodes bool `json:"discardReservedNodes,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

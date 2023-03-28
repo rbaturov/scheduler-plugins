@@ -36,7 +36,7 @@ make
 command.
 If you changed the branch or added new dependency you might need to regenerate vendor directory, for this you can use
 ```shell
-make autogen
+make update-vendor
 ```
 command.
 
@@ -105,5 +105,5 @@ Where example for scheduler-config.yaml, could be taken from manifests/*/schedul
 ## Before submitting
 In addition to starting integration and unit tests, check formatting
 ```shell
-make verify-gofmt
+make verify
 ```
