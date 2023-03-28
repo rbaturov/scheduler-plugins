@@ -20,6 +20,8 @@ import (
 	"os"
 
 	"k8s.io/component-base/cli"
+	_ "k8s.io/component-base/metrics/prometheus/clientgo" // for rest client metric registration
+	_ "k8s.io/component-base/metrics/prometheus/version"  // for version metric registration
 	"k8s.io/kubernetes/cmd/kube-scheduler/app"
 
 	"sigs.k8s.io/scheduler-plugins/pkg/capacityscheduling"
@@ -46,6 +48,8 @@ func main() {
 		app.WithPlugin(capacityscheduling.Name, capacityscheduling.New),
 		app.WithPlugin(coscheduling.Name, coscheduling.New),
 		app.WithPlugin(loadvariationriskbalancing.Name, loadvariationriskbalancing.New),
+		app.WithPlugin(networkoverhead.Name, networkoverhead.New),
+		app.WithPlugin(topologicalsort.Name, topologicalsort.New),
 		app.WithPlugin(noderesources.AllocatableName, noderesources.NewAllocatable),
 		app.WithPlugin(noderesourcetopology.Name, noderesourcetopology.New),
 		app.WithPlugin(preemptiontoleration.Name, preemptiontoleration.New),
@@ -54,8 +58,6 @@ func main() {
 		// app.WithPlugin(crossnodepreemption.Name, crossnodepreemption.New),
 		app.WithPlugin(podstate.Name, podstate.New),
 		app.WithPlugin(qos.Name, qos.New),
-		app.WithPlugin(networkoverhead.Name, networkoverhead.New),
-		app.WithPlugin(topologicalsort.Name, topologicalsort.New),
 	)
 
 	code := cli.Run(command)
