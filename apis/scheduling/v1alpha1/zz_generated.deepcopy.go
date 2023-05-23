@@ -23,6 +23,7 @@ package v1alpha1
 
 import (
 	"k8s.io/api/core/v1"
+	resource "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -200,9 +201,13 @@ func (in *PodGroupSpec) DeepCopyInto(out *PodGroupSpec) {
 	*out = *in
 	if in.MinResources != nil {
 		in, out := &in.MinResources, &out.MinResources
-		*out = make(v1.ResourceList, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val.DeepCopy()
+		*out = new(v1.ResourceList)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make(map[v1.ResourceName]resource.Quantity, len(*in))
+			for key, val := range *in {
+				(*out)[key] = val.DeepCopy()
+			}
 		}
 	}
 	if in.ScheduleTimeoutSeconds != nil {
