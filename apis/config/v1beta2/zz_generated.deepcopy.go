@@ -143,11 +143,6 @@ func (in *NodeResourceTopologyMatchArgs) DeepCopyInto(out *NodeResourceTopologyM
 		*out = new(ScoringStrategy)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.CacheResyncPeriodSeconds != nil {
-		in, out := &in.CacheResyncPeriodSeconds, &out.CacheResyncPeriodSeconds
-		*out = new(int64)
-		**out = **in
-	}
 	return
 }
 
