@@ -202,7 +202,7 @@ func (ctrl *ElasticQuotaController) syncHandler(key string) error {
 	}
 	if _, err = ctrl.schedClient.SchedulingV1alpha1().ElasticQuotas(namespace).
 		Patch(context.TODO(), eq.Name, types.MergePatchType,
-			patch, metav1.PatchOptions{}); err != nil {
+			patch, metav1.PatchOptions{}, "status"); err != nil {
 		return err
 	}
 	ctrl.recorder.Event(eq, v1.EventTypeNormal, "Synced", fmt.Sprintf("Elastic Quota %s synced successfully", key))
@@ -296,20 +296,21 @@ func (ctrl *ElasticQuotaController) podDeleted(obj interface{}) {
 // Example:
 //
 // Pod:
-//   InitContainers
-//     IC1:
-//       CPU: 2
-//       Memory: 1G
-//     IC2:
-//       CPU: 2
-//       Memory: 3G
-//   Containers
-//     C1:
-//       CPU: 2
-//       Memory: 1G
-//     C2:
-//       CPU: 1
-//       Memory: 1G
+//
+//	InitContainers
+//	  IC1:
+//	    CPU: 2
+//	    Memory: 1G
+//	  IC2:
+//	    CPU: 2
+//	    Memory: 3G
+//	Containers
+//	  C1:
+//	    CPU: 2
+//	    Memory: 1G
+//	  C2:
+//	    CPU: 1
+//	    Memory: 1G
 //
 // Result: CPU: 3, Memory: 3G
 func computePodResourceRequest(pod *v1.Pod) v1.ResourceList {
