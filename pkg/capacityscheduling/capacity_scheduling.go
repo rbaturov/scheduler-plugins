@@ -391,13 +391,13 @@ func (p *preemptor) CandidatesToVictimsMap(candidates []preemption.Candidate) ma
 func (p *preemptor) PodEligibleToPreemptOthers(pod *v1.Pod, nominatedNodeStatus *framework.Status) (bool, string) {
 	if pod.Spec.PreemptionPolicy != nil && *pod.Spec.PreemptionPolicy == v1.PreemptNever {
 		klog.V(5).InfoS("Pod is not eligible for preemption because of its preemptionPolicy", "pod", klog.KObj(pod), "preemptionPolicy", v1.PreemptNever)
-		return false, fmt.Sprint("not eligible due to preemptionPolicy=Never.")
+		return false, "not eligible due to preemptionPolicy=Never."
 	}
 
 	preFilterState, err := getPreFilterState(p.state)
 	if err != nil {
 		klog.ErrorS(err, "Failed to read preFilterState from cycleState", "preFilterStateKey", preFilterStateKey)
-		return false, fmt.Sprint("not eligible due to failed to read from cycleState")
+		return false, "not eligible due to failed to read from cycleState"
 	}
 
 	nomNodeName := pod.Status.NominatedNodeName
@@ -435,14 +435,14 @@ func (p *preemptor) PodEligibleToPreemptOthers(pod *v1.Pod, nominatedNodeStatus 
 						// If the terminating pod is in the same namespace with preemptor
 						// and it is less important than preemptor,
 						// return false to avoid preempting more pods.
-						return false, fmt.Sprint("not eligible due to a terminating pod on the nominated node.")
+						return false, "not eligible due to a terminating pod on the nominated node."
 					} else if p.Pod.Namespace != pod.Namespace && !moreThanMinWithPreemptor && eqInfo.usedOverMin() {
 						// There is a terminating pod on the nominated node.
 						// The terminating pod isn't in the same namespace with preemptor.
 						// If moreThanMinWithPreemptor is false, it indicates that preemptor can preempt the pods in other EQs whose used is over min.
 						// And if the used of terminating pod's quota is over min, so the room released by terminating pod on the nominated node can be used by the preemptor.
 						// return false to avoid preempting more pods.
-						return false, fmt.Sprint("not eligible due to a terminating pod on the nominated node.")
+						return false, "not eligible due to a terminating pod on the nominated node."
 					}
 				}
 			}
@@ -454,7 +454,7 @@ func (p *preemptor) PodEligibleToPreemptOthers(pod *v1.Pod, nominatedNodeStatus 
 				}
 				if p.Pod.DeletionTimestamp != nil && corev1helpers.PodPriority(p.Pod) < podPriority {
 					// There is a terminating pod on the nominated node.
-					return false, fmt.Sprint("not eligible due to a terminating pod on the nominated node.")
+					return false, "not eligible due to a terminating pod on the nominated node."
 				}
 			}
 		}
@@ -765,7 +765,7 @@ func getPreFilterState(cycleState *framework.CycleState) (*PreFilterState, error
 	c, err := cycleState.Read(preFilterStateKey)
 	if err != nil {
 		// preFilterState doesn't exist, likely PreFilter wasn't invoked.
-		return nil, fmt.Errorf("error reading %q from cycleState: %v", preFilterStateKey, err)
+		return nil, fmt.Errorf("error reading %q from cycleState: %w", preFilterStateKey, err)
 	}
 
 	s, ok := c.(*PreFilterState)
@@ -779,7 +779,7 @@ func getElasticQuotaSnapshotState(cycleState *framework.CycleState) (*ElasticQuo
 	c, err := cycleState.Read(ElasticQuotaSnapshotKey)
 	if err != nil {
 		// ElasticQuotaSnapshotState doesn't exist, likely PreFilter wasn't invoked.
-		return nil, fmt.Errorf("error reading %q from cycleState: %v", ElasticQuotaSnapshotKey, err)
+		return nil, fmt.Errorf("error reading %q from cycleState: %w", ElasticQuotaSnapshotKey, err)
 	}
 
 	s, ok := c.(*ElasticQuotaSnapshotState)
@@ -790,17 +790,7 @@ func getElasticQuotaSnapshotState(cycleState *framework.CycleState) (*ElasticQuo
 }
 
 func getPDBLister(informerFactory informers.SharedInformerFactory) policylisters.PodDisruptionBudgetLister {
-	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.PodDisruptionBudget) {
-		return informerFactory.Policy().V1().PodDisruptionBudgets().Lister()
-	}
-	return nil
-}
-
-func getPodDisruptionBudgets(pdbLister policylisters.PodDisruptionBudgetLister) ([]*policy.PodDisruptionBudget, error) {
-	if pdbLister != nil {
-		return pdbLister.List(labels.Everything())
-	}
-	return nil, nil
+	return informerFactory.Policy().V1().PodDisruptionBudgets().Lister()
 }
 
 // computePodResourceRequest returns a framework.Resource that covers the largest
@@ -814,20 +804,21 @@ func getPodDisruptionBudgets(pdbLister policylisters.PodDisruptionBudgetLister) 
 // Example:
 //
 // Pod:
-//   InitContainers
-//     IC1:
-//       CPU: 2
-//       Memory: 1G
-//     IC2:
-//       CPU: 2
-//       Memory: 3G
-//   Containers
-//     C1:
-//       CPU: 2
-//       Memory: 1G
-//     C2:
-//       CPU: 1
-//       Memory: 1G
+//
+//	InitContainers
+//	  IC1:
+//	    CPU: 2
+//	    Memory: 1G
+//	  IC2:
+//	    CPU: 2
+//	    Memory: 3G
+//	Containers
+//	  C1:
+//	    CPU: 2
+//	    Memory: 1G
+//	  C2:
+//	    CPU: 1
+//	    Memory: 1G
 //
 // Result: CPU: 3, Memory: 3G
 func computePodResourceRequest(pod *v1.Pod) *framework.Resource {

@@ -79,8 +79,6 @@ type PodGroupManager struct {
 	pgLister pglister.PodGroupLister
 	// podLister is pod lister
 	podLister listerv1.PodLister
-	// reserveResourcePercentage is the reserved resource for the max finished group, range (0,100]
-	reserveResourcePercentage int32
 	sync.RWMutex
 }
 
@@ -113,6 +111,7 @@ func (pgMgr *PodGroupManager) ActivateSiblings(pod *corev1.Pod, state *framework
 		klog.ErrorS(err, "Failed to obtain pods belong to a PodGroup", "podGroup", pgName)
 		return
 	}
+
 	for i := range pods {
 		if pods[i].UID == pod.UID {
 			pods = append(pods[:i], pods[i+1:]...)
@@ -149,8 +148,9 @@ func (pgMgr *PodGroupManager) PreFilter(ctx context.Context, pod *corev1.Pod) er
 		labels.SelectorFromSet(labels.Set{v1alpha1.PodGroupLabel: util.GetPodGroupLabel(pod)}),
 	)
 	if err != nil {
-		return fmt.Errorf("podLister list pods failed: %v", err)
+		return fmt.Errorf("podLister list pods failed: %w", err)
 	}
+
 	if len(pods) < int(pg.Spec.MinMember) {
 		return fmt.Errorf("pre-filter pod %v cannot find enough sibling pods, "+
 			"current pods number: %v, minMember of group: %v", pod.Name, len(pods), pg.Spec.MinMember)
@@ -292,7 +292,7 @@ func (pgMgr *PodGroupManager) CalculateAssignedPods(podGroupName, namespace stri
 	for _, nodeInfo := range nodeInfos {
 		for _, podInfo := range nodeInfo.Pods {
 			pod := podInfo.Pod
-			if pod.Labels[v1alpha1.PodGroupLabel] == podGroupName && pod.Namespace == namespace && pod.Spec.NodeName != "" {
+			if util.GetPodGroupLabel(pod) == podGroupName && pod.Namespace == namespace && pod.Spec.NodeName != "" {
 				count++
 			}
 		}
