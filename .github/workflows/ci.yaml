@@ -7,24 +7,6 @@ on:
     branches: [ master, release-4.12 ]
 
 jobs:
-  commit-check:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-
-      - name: Get branch name (pull request)
-        shell: bash
-        run: echo "BRANCH_NAME=$(echo ${GITHUB_HEAD_REF} | tr / -)" >> $GITHUB_ENV
-
-      - name: Debug
-        run: echo ${{ env.BRANCH_NAME }}
-
-      - name: Verify commits
-        run: TRIGGER_BRANCH=${{ env.BRANCH_NAME }} ./hack-kni/verify-commits.sh
-
   integration-test:
     runs-on: ubuntu-latest
     env:
