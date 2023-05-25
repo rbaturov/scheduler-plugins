@@ -7,7 +7,7 @@ while ensuring that our downstream customizations are maintained.
 Nonetheless, we have the freedom to choose if we want this changes at all, because there are times when the upstream
 changes are not relevant for our work.
 
-## Master Branch Upstream Resync Strategy
+## Master Branch Upstream Resync Strategy: upstream merges (preferred approach)
 ### Preparing the local repo clone
 Clone from a personal fork of openshift-kni/scheduler-plugins via a pushable (ssh) url:
 
@@ -38,28 +38,7 @@ at the beginning of the commit message.
 
 ### Document changes
 
-For the sake of transparency, for every resync process we should update the following table:
-
-| Resync Date | Merge With Upstream Tag/Commit                                                                       | Author      |
-|-------------|------------------------------------------------------------------------------------------------------|-------------|
-| 2023.05.19  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/0ab88ad4a346d4e8682240c1f3817816a4298f40 | ffromani    |
-| 2023.05.09  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/f8a1d6585f44878521a61411788aa4d5cb0488f0 | ffromani    |
-| 2023.03.28  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/ab6c864e24ca08a38efc609524ce10bce8d3db3b | ffromani    |
-| 2023.03.24  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/f303398b77c767ef1c6fab56ded0858a5dedbdd2 | ffromani    |
-| 2022.12.15A | https://github.com/kubernetes-sigs/scheduler-plugins/commit/07d6327976a4b60662a4b5a677f15dea1f343b57 | fromanirh   |
-| 2022.12.15  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/a4d42b75ae5c51ff8a3037854057d7ffc81ab3f6 | fromanirh   |
-| 2022.10.21  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/66dabd41eb42dd6e96e1762c89cf96b4eff05bdd | fromanirh   |
-| 2022.10.11  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/81fb4607af1d45ebf76eb7fbd0eb7ddba7abc959 | swatisehgal |
-| 2022.07.06  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/6aadda4e9213fd0f71807cd6630eb8e58db740fd | swatisehgal |
-| 2022.06.29  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/843d47374bba691f13558806e8fddb866bfb1b9e | swatisehgal |
-| 2022.06.23  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/54bd848cd75ce5c0b6953733b0e477c47aa356a9 | swatisehgal |
-| 2022.05.03  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/7a6dcdc99b1ee9a324823eaf98718cfd9e98e805 | fromanirh   |
-| 2022.03.10  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/2b3439076c54579c3ecdacfc71ca00a23f1e42f8 | fromanirh   |
-| 2022.01.21  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/ec632c3d7e04b7b372f9a6f4338b0dbc53ef3d46 | fromanirh   |
-| 2021.12.23  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/7cf6512bd726f0d30b2ab32443af867a0b849da8 | fromanirh   |
-| 2021.12.11  | https://github.com/kubernetes-sigs/scheduler-plugins/commit/b8d13e17a3e1f633d72d71276a3da6fecf89f2e3 | Tal-or      |
-
-The newest resync should appear in the first row. 
+For the sake of transparency, for every resync process we should update the table in `RESYNC.log.md`. The newest resync should appear in the first row. 
 
 ## Release Branch Upstream Resync Strategy
 
@@ -101,3 +80,21 @@ Fix conflicts introduced by kni-local changes and send PR for review.
 Make sure to run `go mod tidy` and `go mod vendor` to ensure that the repo is in consistent state.
 Every commit that is openshift-kni/scheduler-plugins specific should have a prefix of [KNI]
 at the beginning of the commit message.
+
+## Master Branch Upstream Resync Strategy: upstream carries
+
+There are cases on which we cannot resync with upstream using the preferred merge approach described above.
+Even though upstream is usually slower and deliberate consuming k8s libraries, there are cases on which
+we may want to pull features or fixes in stable branches, and upstream just moved too far.
+
+In these cases we do `upstream carries`.
+
+A `upstream carry` is the target backport of one or more individual commits cherry-picked from upstream PRs
+and repacked in a new PR. `upstream carries` are special-purpose in nature, so we can't have strict
+guidelines like for `merge`s. Nevertheless, **all** the following guidelines apply.
+
+- The `upstream-carry` PR MUST include the tag `[upstream-carry]` in its title
+- The `upstream-carry` PR MUST have the [`upstream-carry` label](https://github.com/openshift-kni/scheduler-plugins/labels/upstream-carry)
+- The cherry-picked commits MUST keep **all** the authorship information (see `Cherry Pick changes from PRs` and **always** use `git cherry-pick -x ...`)
+- The `upstream carry` PR MAY include one or more cherry-picked commits
+- The `upstream carry` PR MAY reference on its github cover letter the upstream PRs from which it takes commits
