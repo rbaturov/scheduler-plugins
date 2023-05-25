@@ -80,3 +80,21 @@ Fix conflicts introduced by kni-local changes and send PR for review.
 Make sure to run `go mod tidy` and `go mod vendor` to ensure that the repo is in consistent state.
 Every commit that is openshift-kni/scheduler-plugins specific should have a prefix of [KNI]
 at the beginning of the commit message.
+
+## Master Branch Upstream Resync Strategy: upstream carries
+
+There are cases on which we cannot resync with upstream using the preferred merge approach described above.
+Even though upstream is usually slower and deliberate consuming k8s libraries, there are cases on which
+we may want to pull features or fixes in stable branches, and upstream just moved too far.
+
+In these cases we do `upstream carries`.
+
+A `upstream carry` is the target backport of one or more individual commits cherry-picked from upstream PRs
+and repacked in a new PR. `upstream carries` are special-purpose in nature, so we can't have strict
+guidelines like for `merge`s. Nevertheless, **all** the following guidelines apply.
+
+- The `upstream-carry` PR MUST include the tag `[upstream-carry]` in its title
+- The `upstream-carry` PR MUST have the [`upstream-carry` label](https://github.com/openshift-kni/scheduler-plugins/labels/upstream-carry)
+- The cherry-picked commits MUST keep **all** the authorship information (see `Cherry Pick changes from PRs` and **always** use `git cherry-pick -x ...`)
+- The `upstream carry` PR MAY include one or more cherry-picked commits
+- The `upstream carry` PR MAY reference on its github cover letter the upstream PRs from which it takes commits
