@@ -19,10 +19,13 @@ package noderesourcetopology
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	k8scache "k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
@@ -33,6 +36,10 @@ import (
 	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
 	nrtcache "sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/cache"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/stringify"
+)
+
+const (
+	maxNUMAId = 64
 )
 
 func initNodeTopologyInformer(tcfg *apiconfig.NodeResourceTopologyMatchArgs, handle framework.Handle) (nrtcache.Interface, error) {
@@ -51,26 +58,22 @@ func initNodeTopologyInformer(tcfg *apiconfig.NodeResourceTopologyMatchArgs, han
 	topologyInformerFactory.Start(ctx.Done())
 	topologyInformerFactory.WaitForCacheSync(ctx.Done())
 
+	if tcfg.DiscardReservedNodes {
+		return nrtcache.NewDiscardReserved(nodeTopologyLister), nil
+	}
+
 	if tcfg.CacheResyncPeriodSeconds <= 0 {
 		return nrtcache.NewPassthrough(nodeTopologyLister), nil
 	}
 
-	podSharedInformer := nrtcache.InformerFromHandle(handle)
-	podLister := handle.SharedInformerFactory().Core().V1().Pods().Lister()
+	podSharedInformer, podLister := nrtcache.InformerFromHandle(handle)
 
-	nrtCache, err := nrtcache.NewOverReserve(nodeTopologyLister, podLister)
+	nrtCache, err := nrtcache.NewOverReserve(tcfg.Cache, nodeTopologyLister, podLister)
 	if err != nil {
 		return nil, err
 	}
 
-	if fwk, ok := handle.(framework.Framework); ok {
-		profileName := fwk.ProfileName()
-		klog.InfoS("setting up foreign pods detection", "name", profileName)
-		nrtcache.RegisterSchedulerProfileName(profileName)
-		nrtcache.SetupForeignPodsDetector(profileName, podSharedInformer, nrtCache)
-	} else {
-		klog.Warningf("cannot determine the scheduler profile names - no foreign pod detection enabled")
-	}
+	initNodeTopologyForeignPodsDetection(tcfg.Cache, handle, podSharedInformer, nrtCache)
 
 	resyncPeriod := time.Duration(tcfg.CacheResyncPeriodSeconds) * time.Second
 	go wait.Forever(nrtCache.Resync, resyncPeriod)
@@ -80,27 +83,100 @@ func initNodeTopologyInformer(tcfg *apiconfig.NodeResourceTopologyMatchArgs, han
 	return nrtCache, nil
 }
 
+func initNodeTopologyForeignPodsDetection(cfg *apiconfig.NodeResourceTopologyCache, handle framework.Handle, podSharedInformer k8scache.SharedInformer, nrtCache *nrtcache.OverReserve) {
+	foreignPodsDetect := getForeignPodsDetectMode(cfg)
+
+	if foreignPodsDetect == apiconfig.ForeignPodsDetectNone {
+		klog.InfoS("foreign pods detection disabled by configuration")
+		return
+	}
+	fwk, ok := handle.(framework.Framework)
+	if !ok {
+		klog.Warningf("cannot determine the scheduler profile names - no foreign pod detection enabled")
+		return
+	}
+
+	profileName := fwk.ProfileName()
+	klog.InfoS("setting up foreign pods detection", "name", profileName, "mode", foreignPodsDetect)
+
+	if foreignPodsDetect == apiconfig.ForeignPodsDetectOnlyExclusiveResources {
+		nrtcache.TrackOnlyForeignPodsWithExclusiveResources()
+	} else {
+		nrtcache.TrackAllForeignPods()
+	}
+	nrtcache.RegisterSchedulerProfileName(profileName)
+	nrtcache.SetupForeignPodsDetector(profileName, podSharedInformer, nrtCache)
+}
+
 func createNUMANodeList(zones topologyv1alpha2.ZoneList) NUMANodeList {
-	nodes := make(NUMANodeList, 0, len(zones))
-	for _, zone := range zones {
+	numaIDToZoneIDx := make([]int, maxNUMAId)
+	nodes := NUMANodeList{}
+	// filter non Node zones and create idToIdx lookup array
+	for i, zone := range zones {
 		if zone.Type != "Node" {
 			continue
 		}
-		var numaID int
-		_, err := fmt.Sscanf(zone.Name, "node-%d", &numaID)
+
+		numaID, err := getID(zone.Name)
 		if err != nil {
-			klog.ErrorS(nil, "Invalid zone format", "zone", zone.Name)
+			klog.Error(err)
 			continue
 		}
-		if numaID > 63 || numaID < 0 {
-			klog.ErrorS(nil, "Invalid NUMA id range", "numaID", numaID)
-			continue
-		}
+
+		numaIDToZoneIDx[numaID] = i
+
 		resources := extractResources(zone)
 		klog.V(6).InfoS("extracted NUMA resources", stringify.ResourceListToLoggable(zone.Name, resources)...)
 		nodes = append(nodes, NUMANode{NUMAID: numaID, Resources: resources})
 	}
+
+	// iterate over nodes and fill them with Costs
+	for i, node := range nodes {
+		nodes[i] = *node.WithCosts(extractCosts(zones[numaIDToZoneIDx[node.NUMAID]].Costs))
+	}
+
 	return nodes
+}
+
+func getID(name string) (int, error) {
+	splitted := strings.Split(name, "-")
+	if len(splitted) != 2 {
+		return -1, fmt.Errorf("invalid zone format zone: %s", name)
+	}
+
+	if splitted[0] != "node" {
+		return -1, fmt.Errorf("invalid zone format zone: %s", name)
+	}
+
+	numaID, err := strconv.Atoi(splitted[1])
+	if err != nil {
+		return -1, fmt.Errorf("invalid zone format zone: %s : %v", name, err)
+	}
+
+	if numaID > maxNUMAId-1 || numaID < 0 {
+		return -1, fmt.Errorf("invalid NUMA id range numaID: %d", numaID)
+	}
+
+	return numaID, nil
+}
+
+func extractCosts(costs topologyv1alpha2.CostList) map[int]int {
+	nodeCosts := make(map[int]int)
+
+	// return early if CostList is missing
+	if len(costs) == 0 {
+		return nodeCosts
+	}
+
+	for _, cost := range costs {
+		numaID, err := getID(cost.Name)
+		if err != nil {
+			continue
+		}
+		nodeCosts[numaID] = int(cost.Value)
+	}
+
+	return nodeCosts
 }
 
 func extractResources(zone topologyv1alpha2.Zone) corev1.ResourceList {
@@ -109,4 +185,27 @@ func extractResources(zone topologyv1alpha2.Zone) corev1.ResourceList {
 		res[corev1.ResourceName(resInfo.Name)] = resInfo.Available.DeepCopy()
 	}
 	return res
+}
+
+func onlyNonNUMAResources(numaNodes NUMANodeList, resources corev1.ResourceList) bool {
+	for resourceName := range resources {
+		for _, node := range numaNodes {
+			if _, ok := node.Resources[resourceName]; ok {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func getForeignPodsDetectMode(cfg *apiconfig.NodeResourceTopologyCache) apiconfig.ForeignPodsDetectMode {
+	var foreignPodsDetect apiconfig.ForeignPodsDetectMode
+	if cfg != nil && cfg.ForeignPodsDetect != nil {
+		foreignPodsDetect = *cfg.ForeignPodsDetect
+	} else { // explicitly set to nil?
+		foreignPodsDetect = apiconfig.ForeignPodsDetectAll
+		klog.InfoS("foreign pods detection value missing", "fallback", foreignPodsDetect)
+	}
+	return foreignPodsDetect
 }

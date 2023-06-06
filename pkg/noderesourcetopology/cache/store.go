@@ -22,13 +22,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	podlisterv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	topologyv1alpha2attr "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2/helper/attribute"
 
+	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
+	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/resourcerequests"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/stringify"
 	"sigs.k8s.io/scheduler-plugins/pkg/util"
 
@@ -197,57 +198,73 @@ func (cnt counter) Len() int {
 }
 
 // podFingerprintForNodeTopology extracts without recomputing the pods fingerprint from
-// the provided Node Resource Topology object.
-func podFingerprintForNodeTopology(nrt *topologyv1alpha2.NodeResourceTopology) string {
+// the provided Node Resource Topology object. Returns the expected fingerprint and the method to compute it.
+func podFingerprintForNodeTopology(nrt *topologyv1alpha2.NodeResourceTopology, method apiconfig.CacheResyncMethod) (string, bool) {
+	wantsOnlyExclRes := false
 	if attr, ok := topologyv1alpha2attr.Get(nrt.Attributes, podfingerprint.Attribute); ok {
-		return attr.Value
+		if method == apiconfig.CacheResyncOnlyExclusiveResources {
+			wantsOnlyExclRes = true
+		} else if method == apiconfig.CacheResyncAutodetect {
+			attrMethod, ok := topologyv1alpha2attr.Get(nrt.Attributes, podfingerprint.AttributeMethod)
+			if ok && (attrMethod.Value == podfingerprint.MethodWithExclusiveResources) {
+				wantsOnlyExclRes = true
+			}
+		}
+		return attr.Value, wantsOnlyExclRes
 	}
+	// with legacy annotations, the exclusive resource method can't ever be true. Just hardcode false.
 	if nrt.Annotations != nil {
-		return nrt.Annotations[podfingerprint.Annotation]
+		return nrt.Annotations[podfingerprint.Annotation], false
 	}
-	return ""
+	return "", false
+}
+
+type podData struct {
+	Namespace             string
+	Name                  string
+	HasExclusiveResources bool
 }
 
 // checkPodFingerprintForNode verifies if the given pods fingeprint (usually from NRT update) matches the
 // computed one using the stored data about pods running on nodes. Returns nil on success, or an error
 // describing the failure
-func checkPodFingerprintForNode(logID string, podLister podlisterv1.PodLister, nodeName, pfpExpected string) error {
-	objs, err := getPodNamespacedNamesByNode(podLister, logID, nodeName)
-	if err != nil {
-		return err
-	}
-
+func checkPodFingerprintForNode(logID string, objs []podData, nodeName, pfpExpected string, onlyExclRes bool) error {
 	st := podfingerprint.MakeStatus(nodeName)
 	pfp := podfingerprint.NewTracingFingerprint(len(objs), &st)
 	for _, obj := range objs {
+		if onlyExclRes && !obj.HasExclusiveResources {
+			continue
+		}
 		pfp.Add(obj.Namespace, obj.Name)
 	}
 	pfpComputed := pfp.Sign()
 
-	klog.V(5).InfoS("nrtcache: podset fingerprint check", "logID", logID, "node", nodeName, "expected", pfpExpected, "computed", pfpComputed)
+	klog.V(5).InfoS("nrtcache: podset fingerprint check", "logID", logID, "node", nodeName, "expected", pfpExpected, "computed", pfpComputed, "onlyExclusiveResources", onlyExclRes)
 	klog.V(6).InfoS("nrtcache: podset fingerprint debug", "logID", logID, "node", nodeName, "status", st.Repr())
 
-	return pfp.Check(pfpExpected)
+	err := pfp.Check(pfpExpected)
+	podfingerprint.MarkCompleted(st)
+	return err
 }
 
-func getPodNamespacedNamesByNode(podLister podlisterv1.PodLister, logID, nodeName string) ([]types.NamespacedName, error) {
+func makeNodeToPodDataMap(podLister podlisterv1.PodLister, logID string) (map[string][]podData, error) {
+	nodeToObjsMap := make(map[string][]podData)
 	pods, err := podLister.List(labels.Everything())
 	if err != nil {
-		return []types.NamespacedName{}, err
+		return nodeToObjsMap, err
 	}
-	objs := make([]types.NamespacedName, 0, len(pods))
 	for _, pod := range pods {
-		if pod.Spec.NodeName != nodeName {
-			continue
-		}
 		if pod.Status.Phase != corev1.PodRunning {
 			// we are interested only about nodes which consume resources
 			continue
 		}
-		objs = append(objs, types.NamespacedName{
-			Namespace: pod.Namespace,
-			Name:      pod.Name,
+		nodeObjs := nodeToObjsMap[pod.Spec.NodeName]
+		nodeObjs = append(nodeObjs, podData{
+			Namespace:             pod.Namespace,
+			Name:                  pod.Name,
+			HasExclusiveResources: resourcerequests.AreExclusiveForPod(pod),
 		})
+		nodeToObjsMap[pod.Spec.NodeName] = nodeObjs
 	}
-	return objs, nil
+	return nodeToObjsMap, nil
 }
