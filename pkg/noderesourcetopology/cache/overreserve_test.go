@@ -18,7 +18,6 @@ package cache
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"sort"
 	"testing"
@@ -31,8 +30,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	podlisterv1 "k8s.io/client-go/listers/core/v1"
+	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
 )
 
 const (
@@ -41,18 +40,69 @@ const (
 	nicResourceName = "vendor.com/nic1"
 )
 
+func TestGetCacheResyncMethod(t *testing.T) {
+	resyncAutodetect := apiconfig.CacheResyncAutodetect
+	resyncAll := apiconfig.CacheResyncAll
+	resyncOnlyExclusiveResources := apiconfig.CacheResyncOnlyExclusiveResources
+
+	testCases := []struct {
+		description string
+		cfg         *apiconfig.NodeResourceTopologyCache
+		expected    apiconfig.CacheResyncMethod
+	}{
+		{
+			description: "nil config",
+			expected:    apiconfig.CacheResyncAutodetect,
+		},
+		{
+			description: "empty config",
+			cfg:         &apiconfig.NodeResourceTopologyCache{},
+			expected:    apiconfig.CacheResyncAutodetect,
+		},
+		{
+			description: "explicit all",
+			cfg: &apiconfig.NodeResourceTopologyCache{
+				ResyncMethod: &resyncAll,
+			},
+			expected: apiconfig.CacheResyncAll,
+		},
+		{
+			description: "explicit autodetect",
+			cfg: &apiconfig.NodeResourceTopologyCache{
+				ResyncMethod: &resyncAutodetect,
+			},
+			expected: apiconfig.CacheResyncAutodetect,
+		},
+		{
+			description: "explicit OnlyExclusiveResources",
+			cfg: &apiconfig.NodeResourceTopologyCache{
+				ResyncMethod: &resyncOnlyExclusiveResources,
+			},
+			expected: apiconfig.CacheResyncOnlyExclusiveResources,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.description, func(t *testing.T) {
+			got := getCacheResyncMethod(testCase.cfg)
+			if got != testCase.expected {
+				t.Errorf("cache resync method got %v expected %v", got, testCase.expected)
+			}
+		})
+	}
+}
 func TestInitEmptyLister(t *testing.T) {
 	fakeClient := faketopologyv1alpha2.NewSimpleClientset()
 	fakeInformer := topologyinformers.NewSharedInformerFactory(fakeClient, 0).Topology().V1alpha2().NodeResourceTopologies()
 	fakePodLister := &fakePodLister{}
 
 	var err error
-	_, err = NewOverReserve(nil, fakePodLister)
+	_, err = NewOverReserve(nil, nil, fakePodLister)
 	if err == nil {
 		t.Fatalf("accepted nil lister")
 	}
 
-	_, err = NewOverReserve(fakeInformer.Lister(), nil)
+	_, err = NewOverReserve(nil, fakeInformer.Lister(), nil)
 	if err == nil {
 		t.Fatalf("accepted nil indexer")
 	}
@@ -657,39 +707,6 @@ func dumpNRT(nrtObj *topologyv1alpha2.NodeResourceTopology) string {
 	return string(nrtJson)
 }
 
-type fakePodLister struct {
-	pods []*corev1.Pod
-	err  error
-}
-
-type fakePodNamespaceLister struct {
-	parent    *fakePodLister
-	namespace string
-}
-
-func (fpl *fakePodLister) AddPod(pod *corev1.Pod) {
-	fpl.pods = append(fpl.pods, pod)
-}
-
-func (fpl *fakePodLister) List(selector labels.Selector) ([]*corev1.Pod, error) {
-	return fpl.pods, fpl.err
-}
-
-func (fpl *fakePodLister) Pods(namespace string) podlisterv1.PodNamespaceLister {
-	return &fakePodNamespaceLister{
-		parent:    fpl,
-		namespace: namespace,
-	}
-}
-
-func (fpnl *fakePodNamespaceLister) List(selector labels.Selector) ([]*corev1.Pod, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
-func (fpnl *fakePodNamespaceLister) Get(name string) (*corev1.Pod, error) {
-	return nil, fmt.Errorf("not yet implemented")
-}
-
 func MakeTopologyResInfo(name, capacity, available string) topologyv1alpha2.ResourceInfo {
 	return topologyv1alpha2.ResourceInfo{
 		Name:      name,
@@ -728,7 +745,7 @@ func makeDefaultTestTopology() []*topologyv1alpha2.NodeResourceTopology {
 }
 
 func mustOverReserve(t *testing.T, nrtLister listerv1alpha2.NodeResourceTopologyLister, podLister podlisterv1.PodLister) *OverReserve {
-	obj, err := NewOverReserve(nrtLister, podLister)
+	obj, err := NewOverReserve(nil, nrtLister, podLister)
 	if err != nil {
 		t.Fatalf("unexpected error creating cache: %v", err)
 	}

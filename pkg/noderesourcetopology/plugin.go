@@ -41,6 +41,12 @@ const (
 type NUMANode struct {
 	NUMAID    int
 	Resources v1.ResourceList
+	Costs     map[int]int
+}
+
+func (n *NUMANode) WithCosts(costs map[int]int) *NUMANode {
+	n.Costs = costs
+	return n
 }
 
 type NUMANodeList []NUMANode
@@ -93,6 +99,7 @@ var _ framework.FilterPlugin = &TopologyMatch{}
 var _ framework.ReservePlugin = &TopologyMatch{}
 var _ framework.ScorePlugin = &TopologyMatch{}
 var _ framework.EnqueueExtensions = &TopologyMatch{}
+var _ framework.PostBindPlugin = &TopologyMatch{}
 
 // Name returns name of the plugin. It is used in logs, etc.
 func (tm *TopologyMatch) Name() string {

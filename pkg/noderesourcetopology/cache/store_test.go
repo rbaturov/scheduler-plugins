@@ -17,14 +17,20 @@ limitations under the License.
 package cache
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"sort"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	podlisterv1 "k8s.io/client-go/listers/core/v1"
+	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
 
 	"github.com/k8stopologyawareschedwg/podfingerprint"
 )
@@ -39,34 +45,142 @@ func TestFingerprintFromNRT(t *testing.T) {
 		},
 	}
 
-	var pfp string
-	pfp = podFingerprintForNodeTopology(nrt)
-	if pfp != "" {
-		t.Errorf("misdetected fingerprint from missing annotations")
-	}
-
-	nrt.Annotations = map[string]string{}
-	pfp = podFingerprintForNodeTopology(nrt)
-	if pfp != "" {
-		t.Errorf("misdetected fingerprint from empty annotations")
-	}
-
 	pfpTestAnn := "test-ann"
-	nrt.Annotations[podfingerprint.Annotation] = pfpTestAnn
-	pfp = podFingerprintForNodeTopology(nrt)
-	if pfp != pfpTestAnn {
-		t.Errorf("misdetected fingerprint as %q expected %q", pfp, pfpTestAnn)
+	pfpTestAttr := "test-attr"
+
+	tcases := []struct {
+		description string
+		anns        map[string]string
+		attrs       []topologyv1alpha2.AttributeInfo
+		expectedPFP string
+	}{
+		{
+			description: "no anns, attr",
+			expectedPFP: "",
+		},
+		{
+			description: "no attrs, empty anns",
+			anns:        map[string]string{},
+			expectedPFP: "",
+		},
+		{
+			description: "no attrs, empty pfp ann",
+			anns: map[string]string{
+				podfingerprint.Annotation: "",
+			},
+			expectedPFP: "",
+		},
+		{
+			description: "no attrs, pfp ann",
+			anns: map[string]string{
+				podfingerprint.Annotation: pfpTestAnn,
+			},
+			expectedPFP: pfpTestAnn,
+		},
+		{
+			description: "attr overrides, pfp ann",
+			anns: map[string]string{
+				podfingerprint.Annotation: pfpTestAnn,
+			},
+			attrs: []topologyv1alpha2.AttributeInfo{
+				{
+					Name:  podfingerprint.Attribute,
+					Value: pfpTestAttr,
+				},
+			},
+			expectedPFP: pfpTestAttr,
+		},
+		{
+			description: "attr, no ann",
+			attrs: []topologyv1alpha2.AttributeInfo{
+				{
+					Name:  podfingerprint.Attribute,
+					Value: pfpTestAttr,
+				},
+			},
+			expectedPFP: pfpTestAttr,
+		},
 	}
 
-	// test attribute overrides annotation
+	for _, tcase := range tcases {
+		t.Run(tcase.description, func(t *testing.T) {
+			nrtObj := nrt.DeepCopy()
+			if tcase.anns != nil {
+				nrtObj.Annotations = make(map[string]string)
+				for key, value := range tcase.anns {
+					nrtObj.Annotations[key] = value
+				}
+			}
+			for _, attr := range tcase.attrs {
+				nrtObj.Attributes = append(nrtObj.Attributes, attr)
+			}
+			pfp, _ := podFingerprintForNodeTopology(nrtObj, apiconfig.CacheResyncAutodetect)
+			if pfp != tcase.expectedPFP {
+				t.Errorf("misdetected fingerprint as %q expected %q (anns=%v attrs=%v)", pfp, tcase.expectedPFP, nrtObj.Annotations, nrtObj.Attributes)
+			}
+		})
+	}
+}
+
+func TestFingerprintMethodFromNRT(t *testing.T) {
 	pfpTestAttr := "test-attr"
-	nrt.Attributes = append(nrt.Attributes, topologyv1alpha2.AttributeInfo{
-		Name:  podfingerprint.Attribute,
-		Value: pfpTestAttr,
-	})
-	pfp = podFingerprintForNodeTopology(nrt)
-	if pfp != pfpTestAttr {
-		t.Errorf("misdetected fingerprint as %q expected %q", pfp, pfpTestAttr)
+	nrt := &topologyv1alpha2.NodeResourceTopology{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "node-0",
+		},
+		TopologyPolicies: []string{
+			"best-effort",
+		},
+		Attributes: []topologyv1alpha2.AttributeInfo{
+			{
+				Name:  podfingerprint.Attribute,
+				Value: pfpTestAttr,
+			},
+		},
+	}
+
+	tcases := []struct {
+		description         string
+		methodValue         string
+		expectedOnlyExclRes bool
+	}{
+		{
+			description:         "no attr",
+			methodValue:         "",
+			expectedOnlyExclRes: false,
+		},
+		{
+			description:         "unrecognized attr",
+			methodValue:         "foobar",
+			expectedOnlyExclRes: false,
+		},
+		{
+			description:         "all (old default)",
+			methodValue:         podfingerprint.MethodAll,
+			expectedOnlyExclRes: false,
+		},
+		{
+			description:         "exclusive only",
+			methodValue:         podfingerprint.MethodWithExclusiveResources,
+			expectedOnlyExclRes: true,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.description, func(t *testing.T) {
+			nrtObj := nrt.DeepCopy()
+			if tcase.methodValue != "" {
+				nrtObj.Attributes = append(nrt.Attributes, topologyv1alpha2.AttributeInfo{
+					Name:  podfingerprint.AttributeMethod,
+					Value: tcase.methodValue,
+				})
+			}
+
+			_, onlyExclRes := podFingerprintForNodeTopology(nrtObj, apiconfig.CacheResyncAutodetect)
+			if onlyExclRes != tcase.expectedOnlyExclRes {
+				t.Errorf("misdetected method: expected %v (from %q) got %v", tcase.expectedOnlyExclRes, tcase.methodValue, onlyExclRes)
+			}
+		})
 	}
 }
 
@@ -451,6 +565,159 @@ func TestResourceStoreUpdate(t *testing.T) {
 	}
 }
 
+func TestMakeNodeToPodDataMap(t *testing.T) {
+	tcases := []struct {
+		description string
+		pods        []*corev1.Pod
+		err         error
+		expected    map[string][]podData
+		expectedErr error
+	}{
+		{
+			description: "empty pod list",
+			expected:    make(map[string][]podData),
+		},
+		{
+			description: "single pod NOT running",
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "namespace1",
+						Name:      "pod1",
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "node1",
+					},
+				},
+			},
+			expected: make(map[string][]podData),
+		},
+		{
+			description: "single pod running",
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "namespace1",
+						Name:      "pod1",
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "node1",
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+					},
+				},
+			},
+			expected: map[string][]podData{
+				"node1": {
+					{
+						Namespace: "namespace1",
+						Name:      "pod1",
+					},
+				},
+			},
+		},
+		{
+			description: "few pods, single node running",
+			pods: []*corev1.Pod{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "namespace1",
+						Name:      "pod1",
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "node1",
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "namespace2",
+						Name:      "pod2",
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "node1",
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "namespace2",
+						Name:      "pod3",
+					},
+					Spec: corev1.PodSpec{
+						NodeName: "node1",
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+					},
+				},
+			},
+			expected: map[string][]podData{
+				"node1": {
+					{
+						Namespace: "namespace1",
+						Name:      "pod1",
+					},
+					{
+						Namespace: "namespace2",
+						Name:      "pod2",
+					},
+					{
+						Namespace: "namespace2",
+						Name:      "pod3",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.description, func(t *testing.T) {
+			podLister := &fakePodLister{
+				pods: tcase.pods,
+				err:  tcase.err,
+			}
+			got, err := makeNodeToPodDataMap(podLister, tcase.description)
+			if err != tcase.expectedErr {
+				t.Errorf("error mismatch: got %v expected %v", err, tcase.expectedErr)
+			}
+			if diff := cmp.Diff(got, tcase.expected); diff != "" {
+				t.Errorf("unexpected result: %v", diff)
+			}
+		})
+	}
+}
+
+func TestCheckPodFingerprintForNode(t *testing.T) {
+	tcases := []struct {
+		description string
+		objs        []podData
+		onlyExclRes bool
+		pfp         string
+		expectedErr error
+	}{
+		{
+			description: "nil objs",
+			onlyExclRes: false,
+			expectedErr: podfingerprint.ErrMalformed,
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.description, func(t *testing.T) {
+			gotErr := checkPodFingerprintForNode("testing", tcase.objs, "test-node", tcase.pfp, tcase.onlyExclRes)
+			if !errors.Is(gotErr, tcase.expectedErr) {
+				t.Errorf("got error %v expected %v", gotErr, tcase.expectedErr)
+			}
+		})
+	}
+}
+
 func findResourceInfo(rinfos []topologyv1alpha2.ResourceInfo, name string) *topologyv1alpha2.ResourceInfo {
 	for idx := 0; idx < len(rinfos); idx++ {
 		if rinfos[idx].Name == name {
@@ -458,4 +725,37 @@ func findResourceInfo(rinfos []topologyv1alpha2.ResourceInfo, name string) *topo
 		}
 	}
 	return nil
+}
+
+type fakePodLister struct {
+	pods []*corev1.Pod
+	err  error
+}
+
+type fakePodNamespaceLister struct {
+	parent    *fakePodLister
+	namespace string
+}
+
+func (fpl *fakePodLister) AddPod(pod *corev1.Pod) {
+	fpl.pods = append(fpl.pods, pod)
+}
+
+func (fpl *fakePodLister) List(selector labels.Selector) ([]*corev1.Pod, error) {
+	return fpl.pods, fpl.err
+}
+
+func (fpl *fakePodLister) Pods(namespace string) podlisterv1.PodNamespaceLister {
+	return &fakePodNamespaceLister{
+		parent:    fpl,
+		namespace: namespace,
+	}
+}
+
+func (fpnl *fakePodNamespaceLister) List(selector labels.Selector) ([]*corev1.Pod, error) {
+	return nil, fmt.Errorf("not yet implemented")
+}
+
+func (fpnl *fakePodNamespaceLister) Get(name string) (*corev1.Pod, error) {
+	return nil, fmt.Errorf("not yet implemented")
 }
