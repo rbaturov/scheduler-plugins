@@ -13,7 +13,7 @@
 # limitations under the License.
 
 COMMONENVVAR=GOOS=$(shell uname -s | tr A-Z a-z)
-BUILDENVVAR=CGO_ENABLED=0
+BUILDENVVAR=
 
 CONTAINER_REGISTRY?="quay.io/openshift-kni"
 CONTAINER_IMAGE?="scheduler-plugins"
