@@ -21,6 +21,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -43,18 +44,18 @@ func IsEnabled() bool {
 	return enabled
 }
 
-func Setup() {
+func Setup(logh logr.Logger) {
 	hasNRTInf, ok := os.LookupEnv(nrtInformerEnvVar)
 	if !ok || hasNRTInf == "" {
-		klog.InfoS("NRT specific informer disabled", "variableFound", ok, "valueGiven", hasNRTInf != "")
+		logh.Info("NRT specific informer disabled", "variableFound", ok, "valueGiven", hasNRTInf != "")
 		return
 	}
 	val, err := strconv.ParseBool(hasNRTInf)
 	if err != nil {
-		klog.Error(err, "NRT specific informer disabled")
+		logh.Error(err, "NRT specific informer disabled")
 		return
 	}
-	klog.InfoS("NRT specific informer status", "value", val)
+	logh.Info("NRT specific informer status", "value", val)
 	enabled = val
 }
 

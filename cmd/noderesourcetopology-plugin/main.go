@@ -62,7 +62,9 @@ func setupPFPStatusDump() {
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
-	kniinformer.Setup()
+	logh := klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog))
+
+	kniinformer.Setup(logh)
 
 	// Register custom plugins to the scheduler framework.
 	// Later they can consist of scheduler profile(s) and hence
