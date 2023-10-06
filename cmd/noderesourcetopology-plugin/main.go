@@ -17,47 +17,23 @@ limitations under the License.
 package main
 
 import (
-	"context"
 	"math/rand"
 	"os"
 	"time"
 
 	"k8s.io/component-base/logs"
-	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	"k8s.io/kubernetes/cmd/kube-scheduler/app"
 
 	"sigs.k8s.io/scheduler-plugins/pkg-kni/knidebug"
-	"sigs.k8s.io/scheduler-plugins/pkg-kni/pfpstatus"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology"
 
 	// Ensure scheme package is initialized.
 	_ "sigs.k8s.io/scheduler-plugins/apis/config/scheme"
 
+	knistatus "sigs.k8s.io/scheduler-plugins/pkg-kni/pfpstatus"
 	kniinformer "sigs.k8s.io/scheduler-plugins/pkg-kni/podinformer"
-
-	"github.com/k8stopologyawareschedwg/podfingerprint"
 )
-
-const (
-	PFPStatusDumpEnvVar string = "PFP_STATUS_DUMP"
-)
-
-func setupPFPStatusDump() {
-	dumpDir, ok := os.LookupEnv(PFPStatusDumpEnvVar)
-	if !ok || dumpDir == "" {
-		klog.InfoS("PFP Status dump disabled", "variableFound", ok, "valueGiven", dumpDir != "")
-		return
-	}
-
-	klog.InfoS("PFP Status dump enabled", "statusDirectory", dumpDir)
-
-	ch := make(chan podfingerprint.Status)
-	logh := klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog))
-
-	podfingerprint.SetCompletionSink(ch)
-	go pfpstatus.RunForever(context.Background(), logh, dumpDir, ch)
-}
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
@@ -65,6 +41,7 @@ func main() {
 	logh := klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog))
 
 	kniinformer.Setup(logh)
+	knistatus.Setup(logh)
 
 	// Register custom plugins to the scheduler framework.
 	// Later they can consist of scheduler profile(s) and hence
@@ -80,8 +57,6 @@ func main() {
 	// utilflag.InitFlags()
 	logs.InitLogs()
 	defer logs.FlushLogs()
-
-	setupPFPStatusDump()
 
 	if err := command.Execute(); err != nil {
 		os.Exit(1)

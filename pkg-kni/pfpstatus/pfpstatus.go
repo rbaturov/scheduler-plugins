@@ -25,13 +25,33 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+
 	"github.com/k8stopologyawareschedwg/podfingerprint"
+)
+
+const (
+	PFPStatusDumpEnvVar string = "PFP_STATUS_DUMP"
 )
 
 type StatusInfo struct {
 	podfingerprint.Status
 	LastWrite time.Time `json:"lastWrite"`
 	SeqNo     int64     `json:"seqNo"`
+}
+
+func Setup(logh logr.Logger) {
+	dumpDir, ok := os.LookupEnv(PFPStatusDumpEnvVar)
+	if !ok || dumpDir == "" {
+		logh.Info("PFP Status dump disabled", "variableFound", ok, "valueGiven", dumpDir != "")
+		return
+	}
+
+	logh.Info("PFP Status dump enabled", "statusDirectory", dumpDir)
+
+	ch := make(chan podfingerprint.Status)
+
+	podfingerprint.SetCompletionSink(ch)
+	go RunForever(context.Background(), logh, dumpDir, ch)
 }
 
 func RunForever(ctx context.Context, logger logr.Logger, baseDirectory string, updates <-chan podfingerprint.Status) {
