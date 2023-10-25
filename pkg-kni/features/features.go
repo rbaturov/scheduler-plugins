@@ -17,6 +17,7 @@
 package features
 
 import (
+	genericfeatures "k8s.io/apiserver/pkg/features"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/component-base/featuregate"
 	"k8s.io/klog/v2"
@@ -24,7 +25,7 @@ import (
 
 func Desired() map[string]bool {
 	return map[string]bool{
-		"UnauthenticatedHTTP2DOSMitigation": true,
+		string(genericfeatures.UnauthenticatedHTTP2DOSMitigation): true,
 	}
 }
 
