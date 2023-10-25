@@ -21,6 +21,7 @@ import (
 	"os"
 	"time"
 
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2/klogr"
 	"k8s.io/kubernetes/cmd/kube-scheduler/app"
@@ -31,11 +32,14 @@ import (
 	// Ensure scheme package is initialized.
 	_ "sigs.k8s.io/scheduler-plugins/apis/config/scheme"
 
+	knifeatures "sigs.k8s.io/scheduler-plugins/pkg-kni/features"
 	knistatus "sigs.k8s.io/scheduler-plugins/pkg-kni/pfpstatus"
 	kniinformer "sigs.k8s.io/scheduler-plugins/pkg-kni/podinformer"
 )
 
 func main() {
+	utilfeature.DefaultMutableFeatureGate.SetFromMap(knifeatures.Desired())
+
 	rand.Seed(time.Now().UnixNano())
 
 	logh := klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog))
