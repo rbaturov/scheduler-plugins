@@ -22,6 +22,7 @@ import (
 	"os"
 	"time"
 
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
@@ -34,6 +35,7 @@ import (
 	// Ensure scheme package is initialized.
 	_ "sigs.k8s.io/scheduler-plugins/apis/config/scheme"
 
+	knifeatures "sigs.k8s.io/scheduler-plugins/pkg-kni/features"
 	kniinformer "sigs.k8s.io/scheduler-plugins/pkg-kni/podinformer"
 
 	"github.com/k8stopologyawareschedwg/podfingerprint"
@@ -60,6 +62,8 @@ func setupPFPStatusDump() {
 }
 
 func main() {
+	utilfeature.DefaultMutableFeatureGate.SetFromMap(knifeatures.Desired())
+
 	rand.Seed(time.Now().UnixNano())
 
 	kniinformer.Setup()
