@@ -10,4 +10,6 @@ exclude:
     - "vendor/github.com/golang/**"
     - "vendor/github.com/google/**"
     - "vendor/github.com/openshift/**"
+    - "vendor/github.com/paypal/load-watcher/**"
+    - "vendor/go.etcd.io/**"
     - "vendor/golang.org/**"
