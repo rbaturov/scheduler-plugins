@@ -424,10 +424,11 @@ func applyFixes(roots []*action) error {
 			return err
 		}
 
-		out, err := diff.ApplyBytes(contents, edits)
+		applied, err := diff.Apply(string(contents), edits)
 		if err != nil {
 			return err
 		}
+		out := []byte(applied)
 
 		// Try to format the file.
 		if formatted, err := format.Source(out); err == nil {
