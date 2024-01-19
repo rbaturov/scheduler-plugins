@@ -152,23 +152,6 @@ type gobFact struct {
 	Fact    analysis.Fact   // type and value of user-defined Fact
 }
 
-// A Decoder decodes the facts from the direct imports of the package
-// provided to NewEncoder. A single decoder may be used to decode
-// multiple fact sets (e.g. each for a different set of fact types)
-// for the same package. Each call to Decode returns an independent
-// fact set.
-type Decoder struct {
-	pkg      *types.Package
-	packages map[string]*types.Package
-}
-
-// NewDecoder returns a fact decoder for the specified package.
-func NewDecoder(pkg *types.Package) *Decoder {
-	// Compute the import map for this package.
-	// See the package doc comment.
-	return &Decoder{pkg, importMap(pkg.Imports())}
-}
-
 // Decode decodes all the facts relevant to the analysis of package pkg.
 // The read function reads serialized fact data from an external source
 // for one of of pkg's direct imports. The empty file is a valid
@@ -176,24 +159,28 @@ func NewDecoder(pkg *types.Package) *Decoder {
 //
 // It is the caller's responsibility to call gob.Register on all
 // necessary fact types.
-func (d *Decoder) Decode(read func(*types.Package) ([]byte, error)) (*Set, error) {
+func Decode(pkg *types.Package, read func(packagePath string) ([]byte, error)) (*Set, error) {
+	// Compute the import map for this package.
+	// See the package doc comment.
+	packages := importMap(pkg.Imports())
+
 	// Read facts from imported packages.
 	// Facts may describe indirectly imported packages, or their objects.
 	m := make(map[key]analysis.Fact) // one big bucket
-	for _, imp := range d.pkg.Imports() {
+	for _, imp := range pkg.Imports() {
 		logf := func(format string, args ...interface{}) {
 			if debug {
 				prefix := fmt.Sprintf("in %s, importing %s: ",
-					d.pkg.Path(), imp.Path())
+					pkg.Path(), imp.Path())
 				log.Print(prefix, fmt.Sprintf(format, args...))
 			}
 		}
 
 		// Read the gob-encoded facts.
-		data, err := read(imp)
+		data, err := read(imp.Path())
 		if err != nil {
 			return nil, fmt.Errorf("in %s, can't import facts for package %q: %v",
-				d.pkg.Path(), imp.Path(), err)
+				pkg.Path(), imp.Path(), err)
 		}
 		if len(data) == 0 {
 			continue // no facts
@@ -208,7 +195,7 @@ func (d *Decoder) Decode(read func(*types.Package) ([]byte, error)) (*Set, error
 
 		// Parse each one into a key and a Fact.
 		for _, f := range gobFacts {
-			factPkg := d.packages[f.PkgPath]
+			factPkg := packages[f.PkgPath]
 			if factPkg == nil {
 				// Fact relates to a dependency that was
 				// unused in this translation unit. Skip.
@@ -235,7 +222,7 @@ func (d *Decoder) Decode(read func(*types.Package) ([]byte, error)) (*Set, error
 		}
 	}
 
-	return &Set{pkg: d.pkg, m: m}, nil
+	return &Set{pkg: pkg, m: m}, nil
 }
 
 // Encode encodes a set of facts to a memory buffer.
