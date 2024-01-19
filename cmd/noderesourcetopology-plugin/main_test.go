@@ -34,6 +34,7 @@ import (
 	"k8s.io/kubernetes/cmd/kube-scheduler/app/options"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config/testing/defaults"
+	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/schedulinggates"
 
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology"
 )
@@ -151,6 +152,7 @@ profiles:
 			registryOptions: []app.Option{app.WithPlugin(noderesourcetopology.Name, noderesourcetopology.New)},
 			wantPlugins: map[string]*config.Plugins{
 				"default-scheduler": {
+					PreEnqueue: config.PluginSet{Enabled: []config.Plugin{{Name: schedulinggates.Name}}},
 					QueueSort:  defaults.ExpandedPluginsV1beta3.QueueSort,
 					Bind:       defaults.ExpandedPluginsV1beta3.Bind,
 					PreFilter:  defaults.ExpandedPluginsV1beta3.PreFilter,
