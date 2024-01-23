@@ -12,6 +12,7 @@ exclude:
     - vendor/sigs.k8s.io/controller-runtime/pkg/envtest/crd.go
     - vendor/sigs.k8s.io/controller-runtime/pkg/envtest/webhook.go
     - vendor/sigs.k8s.io/controller-runtime/pkg/internal/testing/process/process.go
+    - vendor/sigs.k8s.io/controller-runtime/pkg/log/log.go
     - vendor/sigs.k8s.io/controller-runtime/pkg/webhook/server.go
     - vendor/github.com/google/uuid/hash.go
     - vendor/github.com/paypal/load-watcher/pkg/watcher/internal/metricsprovider/prometheus.go

@@ -34,7 +34,6 @@ import (
 
 	knifeatures "sigs.k8s.io/scheduler-plugins/pkg-kni/features"
 	knistatus "sigs.k8s.io/scheduler-plugins/pkg-kni/pfpstatus"
-	kniinformer "sigs.k8s.io/scheduler-plugins/pkg-kni/podinformer"
 )
 
 func main() {
@@ -44,7 +43,6 @@ func main() {
 
 	logh := klogr.NewWithOptions(klogr.WithFormat(klogr.FormatKlog))
 
-	kniinformer.Setup(logh)
 	knistatus.Setup(logh)
 
 	// Register custom plugins to the scheduler framework.

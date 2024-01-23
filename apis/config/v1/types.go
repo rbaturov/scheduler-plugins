@@ -30,6 +30,8 @@ type CoschedulingArgs struct {
 
 	// PermitWaitingTimeSeconds is the waiting timeout in seconds.
 	PermitWaitingTimeSeconds *int64 `json:"permitWaitingTimeSeconds,omitempty"`
+	// PodGroupBackoffSeconds is the backoff time in seconds before a pod group can be scheduled again.
+	PodGroupBackoffSeconds *int64 `json:"podGroupBackoffSeconds,omitempty"`
 }
 
 // ModeType is a type "string".
@@ -120,6 +122,21 @@ type LoadVariationRiskBalancingArgs struct {
 	SafeVarianceSensitivity *float64 `json:"safeVarianceSensitivity,omitempty"`
 }
 
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:defaulter-gen=true
+
+// LowRiskOverCommitmentArgs holds arguments used to configure LowRiskOverCommitment plugin.
+type LowRiskOverCommitmentArgs struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// Common parameters for trimaran plugins
+	TrimaranSpec `json:",inline"`
+	// The number of windows over which usage data metrics are smoothed
+	SmoothingWindowSize *int64 `json:"smoothingWindowSize,omitempty"`
+	// Resources fractional weight of risk due to limits specification [0,1]
+	RiskLimitWeights map[v1.ResourceName]float64 `json:"riskLimitWeights,omitempty"`
+}
+
 // ScoringStrategyType is a "string" type.
 type ScoringStrategyType string
 
@@ -157,6 +174,14 @@ const (
 	CacheResyncOnlyExclusiveResources CacheResyncMethod = "OnlyExclusiveResources"
 )
 
+// CacheInformerMode is a "string" type
+type CacheInformerMode string
+
+const (
+	CacheInformerShared    CacheInformerMode = "Shared"
+	CacheInformerDedicated CacheInformerMode = "Dedicated"
+)
+
 // NodeResourceTopologyCache define configuration details for the NodeResourceTopology cache.
 type NodeResourceTopologyCache struct {
 	// ForeignPodsDetect sets how foreign pods should be handled.
@@ -173,6 +198,11 @@ type NodeResourceTopologyCache struct {
 	// Has no effect if caching is disabled (CacheResyncPeriod is zero) or if DiscardReservedNodes
 	// is enabled. "Autodetect" is the default, reads hint from NRT objects. Fallback is "All".
 	ResyncMethod *CacheResyncMethod `json:"resyncMethod,omitempty"`
+	// InformerMode controls the channel the cache uses to get updates about pods.
+	// "Shared" uses the default settings; "Dedicated" creates a specific subscription which is
+	// guaranteed to best suit the cache needs, at cost of one extra connection.
+	// If unspecified, default is "Dedicated"
+	InformerMode *CacheInformerMode `json:"informerMode,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

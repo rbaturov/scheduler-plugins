@@ -17,66 +17,43 @@ limitations under the License.
 package cache
 
 import (
-	"reflect"
+	"context"
 	"testing"
 
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
-	faketopologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/generated/clientset/versioned/fake"
-	topologyinformers "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/generated/informers/externalversions"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	podlisterv1 "k8s.io/client-go/listers/core/v1"
+
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func TestDiscardReservedNodesGetNRTCopy(t *testing.T) {
-	fakeClient := faketopologyv1alpha2.NewSimpleClientset()
-	fakeInformer := topologyinformers.NewSharedInformerFactory(fakeClient, 0).Topology().V1alpha2().NodeResourceTopologies()
+func TestDiscardReservedNodesGetCachedNRTCopy(t *testing.T) {
+	testNodeName := "worker-node-1"
+	nrt := makeTestNRT(testNodeName)
 
-	nrtCache := NewDiscardReserved(fakeInformer.Lister())
-	var nrtObj *topologyv1alpha2.NodeResourceTopology
-	nrtObj, _ = nrtCache.GetCachedNRTCopy("node1", &corev1.Pod{})
-	if nrtObj != nil {
-		t.Fatalf("non-empty object from empty cache")
-	}
-
-	nodeTopologies := []*topologyv1alpha2.NodeResourceTopology{
+	testCases := []testCaseGetCachedNRTCopy{
 		{
-			ObjectMeta:       metav1.ObjectMeta{Name: "node1"},
-			TopologyPolicies: []string{string(topologyv1alpha2.SingleNUMANodeContainerLevel)},
-			Zones: topologyv1alpha2.ZoneList{
-				{
-					Name: "node-0",
-					Type: "Node",
-					Resources: topologyv1alpha2.ResourceInfoList{
-						MakeTopologyResInfo(cpu, "20", "4"),
-						MakeTopologyResInfo(memory, "8Gi", "8Gi"),
-						MakeTopologyResInfo(nicResourceName, "30", "10"),
-					},
-				},
-				{
-					Name: "node-1",
-					Type: "Node",
-					Resources: topologyv1alpha2.ResourceInfoList{
-						MakeTopologyResInfo(cpu, "30", "8"),
-						MakeTopologyResInfo(memory, "8Gi", "8Gi"),
-						MakeTopologyResInfo(nicResourceName, "30", "10"),
-					},
-				},
+			name: "data present with foreign pods",
+			nodeTopologies: []*topologyv1alpha2.NodeResourceTopology{
+				nrt,
 			},
+			nodeName:       testNodeName,
+			hasForeignPods: true,
+			expectedNRT:    nrt,
+			expectedOK:     true,
 		},
 	}
-	for _, obj := range nodeTopologies {
-		fakeInformer.Informer().GetStore().Update(obj)
-	}
 
-	nrtObj, ok := nrtCache.GetCachedNRTCopy("node1", &corev1.Pod{})
-	if !reflect.DeepEqual(nrtObj, nodeTopologies[0]) {
-		t.Fatalf("unexpected object from cache\ngot: %s\nexpected: %s\n", dumpNRT(nrtObj), dumpNRT(nodeTopologies[0]))
-	}
-
-	if !ok {
-		t.Fatalf("expecting GetCachedNRTCopy to return true not false")
-	}
+	checkGetCachedNRTCopy(
+		t,
+		func(client ctrlclient.Client, _ podlisterv1.PodLister) (Interface, error) {
+			return NewDiscardReserved(client), nil
+		},
+		testCases...,
+	)
 }
 
 func TestDiscardReservedNodesGetNRTCopyFails(t *testing.T) {
@@ -88,7 +65,7 @@ func TestDiscardReservedNodesGetNRTCopyFails(t *testing.T) {
 		},
 	}
 
-	nrtObj, ok := nrtCache.GetCachedNRTCopy("node1", &corev1.Pod{})
+	nrtObj, ok := nrtCache.GetCachedNRTCopy(context.Background(), "node1", &corev1.Pod{})
 	if ok {
 		t.Fatal("expected false\ngot true\n")
 	}
