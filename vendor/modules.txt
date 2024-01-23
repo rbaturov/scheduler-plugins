@@ -121,7 +121,7 @@ github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
-# github.com/google/cel-go v0.12.7
+# github.com/google/cel-go v0.12.6
 ## explicit; go 1.17
 github.com/google/cel-go/cel
 github.com/google/cel-go/checker
@@ -323,7 +323,7 @@ go.etcd.io/etcd/client/v3/internal/resolver
 ## explicit; go 1.17
 go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc
 go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc/internal
-# go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.35.1
+# go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.35.0
 ## explicit; go 1.17
 go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 # go.opentelemetry.io/otel v1.10.0
@@ -410,7 +410,7 @@ golang.org/x/exp/utf8string
 golang.org/x/mod/internal/lazyregexp
 golang.org/x/mod/module
 golang.org/x/mod/semver
-# golang.org/x/net v0.17.0 => golang.org/x/net v0.17.0
+# golang.org/x/net v0.10.0 => golang.org/x/net v0.17.0
 ## explicit; go 1.17
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
@@ -688,7 +688,7 @@ k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/scheme
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1beta1
-# k8s.io/apimachinery v0.26.7 => k8s.io/apimachinery v0.26.10-0.20231013031804-4eaec8069337
+# k8s.io/apimachinery v0.26.7 => k8s.io/apimachinery v0.26.7
 ## explicit; go 1.19
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors
@@ -742,7 +742,7 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/apiserver v0.26.7 => k8s.io/apiserver v0.0.0-20231013073434-9cb9f629e95d
+# k8s.io/apiserver v0.26.7 => k8s.io/apiserver v0.26.7
 ## explicit; go 1.19
 k8s.io/apiserver/pkg/admission
 k8s.io/apiserver/pkg/admission/cel
@@ -1520,8 +1520,8 @@ sigs.k8s.io/structured-merge-diff/v4/value
 sigs.k8s.io/yaml
 # k8s.io/api => k8s.io/api v0.26.7
 # k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.26.7
-# k8s.io/apimachinery => k8s.io/apimachinery v0.26.10-0.20231013031804-4eaec8069337
-# k8s.io/apiserver => k8s.io/apiserver v0.0.0-20231013073434-9cb9f629e95d
+# k8s.io/apimachinery => k8s.io/apimachinery v0.26.7
+# k8s.io/apiserver => k8s.io/apiserver v0.26.7
 # k8s.io/cli-runtime => k8s.io/cli-runtime v0.26.7
 # k8s.io/client-go => k8s.io/client-go v0.26.7
 # k8s.io/cloud-provider => k8s.io/cloud-provider v0.26.7
