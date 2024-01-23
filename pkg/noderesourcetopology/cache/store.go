@@ -21,21 +21,15 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/labels"
-	podlisterv1 "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 
 	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
 	topologyv1alpha2attr "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2/helper/attribute"
-
-	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
-	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/resourcerequests"
-	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/stringify"
-	"sigs.k8s.io/scheduler-plugins/pkg/util"
-
 	"github.com/k8stopologyawareschedwg/podfingerprint"
 
-	kniinformer "sigs.k8s.io/scheduler-plugins/pkg-kni/podinformer"
+	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
+	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/stringify"
+	"sigs.k8s.io/scheduler-plugins/pkg/util"
 )
 
 // nrtStore maps the NRT data by node name. It is not thread safe and needs to be protected by a lock.
@@ -45,7 +39,7 @@ type nrtStore struct {
 }
 
 // newNrtStore creates a new nrtStore and initializes it with copies of the provided Node Resource Topology data.
-func newNrtStore(nrts []*topologyv1alpha2.NodeResourceTopology) *nrtStore {
+func newNrtStore(nrts []topologyv1alpha2.NodeResourceTopology) *nrtStore {
 	data := make(map[string]*topologyv1alpha2.NodeResourceTopology, len(nrts))
 	for _, nrt := range nrts {
 		data[nrt.Name] = nrt.DeepCopy()
@@ -247,26 +241,4 @@ func checkPodFingerprintForNode(logID string, objs []podData, nodeName, pfpExpec
 	err := pfp.Check(pfpExpected)
 	podfingerprint.MarkCompleted(st)
 	return err
-}
-
-func makeNodeToPodDataMap(podLister podlisterv1.PodLister, logID string) (map[string][]podData, error) {
-	nodeToObjsMap := make(map[string][]podData)
-	pods, err := podLister.List(labels.Everything())
-	if err != nil {
-		return nodeToObjsMap, err
-	}
-	for _, pod := range pods {
-		if !kniinformer.IsPodRelevantForState(pod) {
-			// we are interested only about nodes which consume resources
-			continue
-		}
-		nodeObjs := nodeToObjsMap[pod.Spec.NodeName]
-		nodeObjs = append(nodeObjs, podData{
-			Namespace:             pod.Namespace,
-			Name:                  pod.Name,
-			HasExclusiveResources: resourcerequests.AreExclusiveForPod(pod),
-		})
-		nodeToObjsMap[pod.Spec.NodeName] = nodeObjs
-	}
-	return nodeToObjsMap, nil
 }

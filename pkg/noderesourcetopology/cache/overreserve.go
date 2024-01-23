@@ -17,28 +17,31 @@ limitations under the License.
 package cache
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
+	"github.com/k8stopologyawareschedwg/podfingerprint"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	podlisterv1 "k8s.io/client-go/listers/core/v1"
-	k8scache "k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-	"k8s.io/kubernetes/pkg/scheduler/framework"
 
-	topologyv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/apis/topology/v1alpha2"
-	listerv1alpha2 "github.com/k8stopologyawareschedwg/noderesourcetopology-api/pkg/generated/listers/topology/v1alpha2"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	apiconfig "sigs.k8s.io/scheduler-plugins/apis/config"
+	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/podprovider"
+	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/resourcerequests"
 	"sigs.k8s.io/scheduler-plugins/pkg/noderesourcetopology/stringify"
-
-	"github.com/k8stopologyawareschedwg/podfingerprint"
 )
 
 type OverReserve struct {
+	client           ctrlclient.Client
 	lock             sync.Mutex
 	nrts             *nrtStore
 	assumedResources map[string]*resourceStore // nodeName -> resourceStore
@@ -46,37 +49,39 @@ type OverReserve struct {
 	// to resync nodes. See The documentation of Resync() below for more details.
 	nodesMaybeOverreserved counter
 	nodesWithForeignPods   counter
-	nrtLister              listerv1alpha2.NodeResourceTopologyLister
 	podLister              podlisterv1.PodLister
 	resyncMethod           apiconfig.CacheResyncMethod
+	isPodRelevant          podprovider.PodFilterFunc
 }
 
-func NewOverReserve(cfg *apiconfig.NodeResourceTopologyCache, nrtLister listerv1alpha2.NodeResourceTopologyLister, podLister podlisterv1.PodLister) (*OverReserve, error) {
-	if nrtLister == nil || podLister == nil {
+func NewOverReserve(cfg *apiconfig.NodeResourceTopologyCache, client ctrlclient.Client, podLister podlisterv1.PodLister, isPodRelevant podprovider.PodFilterFunc) (*OverReserve, error) {
+	if client == nil || podLister == nil {
 		return nil, fmt.Errorf("nrtcache: received nil references")
 	}
 
 	resyncMethod := getCacheResyncMethod(cfg)
 
-	nrtObjs, err := nrtLister.List(labels.Everything())
-	if err != nil {
+	nrtObjs := &topologyv1alpha2.NodeResourceTopologyList{}
+	// TODO: we should pass-in a context in the future
+	if err := client.List(context.Background(), nrtObjs); err != nil {
 		return nil, err
 	}
 
-	klog.V(3).InfoS("nrtcache: initializing", "objects", len(nrtObjs), "method", resyncMethod)
+	klog.V(3).InfoS("nrtcache: initializing", "objects", len(nrtObjs.Items), "method", resyncMethod)
 	obj := &OverReserve{
-		nrts:                   newNrtStore(nrtObjs),
+		client:                 client,
+		nrts:                   newNrtStore(nrtObjs.Items),
 		assumedResources:       make(map[string]*resourceStore),
 		nodesMaybeOverreserved: newCounter(),
 		nodesWithForeignPods:   newCounter(),
-		nrtLister:              nrtLister,
 		podLister:              podLister,
 		resyncMethod:           resyncMethod,
+		isPodRelevant:          isPodRelevant,
 	}
 	return obj, nil
 }
 
-func (ov *OverReserve) GetCachedNRTCopy(nodeName string, pod *corev1.Pod) (*topologyv1alpha2.NodeResourceTopology, bool) {
+func (ov *OverReserve) GetCachedNRTCopy(ctx context.Context, nodeName string, pod *corev1.Pod) (*topologyv1alpha2.NodeResourceTopology, bool) {
 	ov.lock.Lock()
 	defer ov.lock.Unlock()
 	if ov.nodesWithForeignPods.IsSet(nodeName) {
@@ -197,7 +202,7 @@ func (ov *OverReserve) Resync() {
 	}
 
 	// node -> pod identifier (namespace, name)
-	nodeToObjsMap, err := makeNodeToPodDataMap(ov.podLister, logID)
+	nodeToObjsMap, err := makeNodeToPodDataMap(ov.podLister, ov.isPodRelevant, logID)
 	if err != nil {
 		klog.ErrorS(err, "cannot find the mapping between running pods and nodes")
 		return
@@ -208,8 +213,8 @@ func (ov *OverReserve) Resync() {
 
 	var nrtUpdates []*topologyv1alpha2.NodeResourceTopology
 	for _, nodeName := range nodeNames {
-		nrtCandidate, err := ov.nrtLister.Get(nodeName)
-		if err != nil {
+		nrtCandidate := &topologyv1alpha2.NodeResourceTopology{}
+		if err := ov.client.Get(context.Background(), types.NamespacedName{Name: nodeName}, nrtCandidate); err != nil {
 			klog.V(3).InfoS("nrtcache: failed to get NodeTopology", "logID", logID, "node", nodeName, "error", err)
 			continue
 		}
@@ -265,14 +270,30 @@ func (ov *OverReserve) FlushNodes(logID string, nrts ...*topologyv1alpha2.NodeRe
 	}
 }
 
-func InformerFromHandle(handle framework.Handle) (k8scache.SharedIndexInformer, podlisterv1.PodLister) {
-	podHandle := handle.SharedInformerFactory().Core().V1().Pods() // shortcut
-	return podHandle.Informer(), podHandle.Lister()
-}
-
 // to be used only in tests
 func (ov *OverReserve) Store() *nrtStore {
 	return ov.nrts
+}
+
+func makeNodeToPodDataMap(podLister podlisterv1.PodLister, isPodRelevant podprovider.PodFilterFunc, logID string) (map[string][]podData, error) {
+	nodeToObjsMap := make(map[string][]podData)
+	pods, err := podLister.List(labels.Everything())
+	if err != nil {
+		return nodeToObjsMap, err
+	}
+	for _, pod := range pods {
+		if !isPodRelevant(pod, logID) {
+			continue
+		}
+		nodeObjs := nodeToObjsMap[pod.Spec.NodeName]
+		nodeObjs = append(nodeObjs, podData{
+			Namespace:             pod.Namespace,
+			Name:                  pod.Name,
+			HasExclusiveResources: resourcerequests.AreExclusiveForPod(pod),
+		})
+		nodeToObjsMap[pod.Spec.NodeName] = nodeObjs
+	}
+	return nodeToObjsMap, nil
 }
 
 func logIDFromTime() string {
