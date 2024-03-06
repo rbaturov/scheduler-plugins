@@ -2,15 +2,11 @@
 
 aliases:
   kni-scheduler-reviewers:
-    - MarSik
     - ffromani
-    - yanirq
-    - Tal-or
-    - jlojosnegros
     - swatisehgal
   kni-scheduler-approvers:
-    - MarSik
     - ffromani
-    - yanirq
-    - Tal-or
+    - MarSik
     - swatisehgal
+    - Tal-or
+    - yanirq
