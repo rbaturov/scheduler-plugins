@@ -18,72 +18,76 @@ package knidebug
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 )
 
 func TestFrameworkResourceToLoggable(t *testing.T) {
 	tests := []struct {
 		name      string
-		logKey    string
+		pod       *corev1.Pod
 		resources *framework.Resource
 		expected  string
 	}{
 		{
 			name:      "empty",
-			logKey:    "",
+			pod:       nil,
 			resources: &framework.Resource{},
-			expected:  ` logKey="" cpu="0 (0)" memory="0 (0 B)"`,
+			expected:  ` pod="" podUID="<nil>" cpu="0 (0)" memory="0 (0 B)"`,
 		},
 		{
-			name:      "only logKey",
-			logKey:    "TEST1",
+			name:      "only pod",
+			pod:       makePod("uid0", "namespace0", "name0"),
 			resources: &framework.Resource{},
-			expected:  ` logKey="TEST1" cpu="0 (0)" memory="0 (0 B)"`,
+			expected:  ` pod="namespace0/name0" podUID="uid0" cpu="0 (0)" memory="0 (0 B)"`,
 		},
 		{
-			name:   "only CPUs",
-			logKey: "TEST1",
+			name: "only cpus",
+			pod:  makePod("uid1", "namespace1", "name1"),
 			resources: &framework.Resource{
 				MilliCPU: 16000,
 			},
-			expected: ` logKey="TEST1" cpu="16000 (16)" memory="0 (0 B)"`,
+			expected: ` pod="namespace1/name1" podUID="uid1" cpu="16000 (16)" memory="0 (0 B)"`,
 		},
 		{
-			name:   "only Memory",
-			logKey: "TEST2",
+			name: "only Memory",
+			pod:  makePod("uid2", "namespace2", "name2"),
 			resources: &framework.Resource{
 				Memory: 16 * 1024 * 1024 * 1024,
 			},
-			expected: ` logKey="TEST2" cpu="0 (0)" memory="17179869184 (16 GiB)"`,
+			expected: ` pod="namespace2/name2" podUID="uid2" cpu="0 (0)" memory="17179869184 (16 GiB)"`,
 		},
 		{
-			name:   "CPUs and Memory, no logKey",
-			logKey: "",
+			name: "cpus and Memory, no pod",
+			pod:  nil,
 			resources: &framework.Resource{
 				MilliCPU: 24000,
 				Memory:   16 * 1024 * 1024 * 1024,
 			},
-			expected: ` logKey="" cpu="24000 (24)" memory="17179869184 (16 GiB)"`,
+			expected: ` pod="" podUID="<nil>" cpu="24000 (24)" memory="17179869184 (16 GiB)"`,
 		},
 		{
-			name:   "CPUs and Memory",
-			logKey: "TEST3",
+			name: "cpus and Memory",
+			pod:  makePod("uid3", "namespace3", "name3"),
 			resources: &framework.Resource{
 				MilliCPU: 24000,
 				Memory:   16 * 1024 * 1024 * 1024,
 			},
-			expected: ` logKey="TEST3" cpu="24000 (24)" memory="17179869184 (16 GiB)"`,
+			expected: ` pod="namespace3/name3" podUID="uid3" cpu="24000 (24)" memory="17179869184 (16 GiB)"`,
 		},
 		{
-			name:   "CPUs, Memory, hugepages-2Mi",
-			logKey: "TEST4",
+			name: "cpus, Memory, hugepages-2Mi",
+			pod:  makePod("uid4", "namespace4", "name4"),
 			resources: &framework.Resource{
 				MilliCPU: 24000,
 				Memory:   16 * 1024 * 1024 * 1024,
@@ -91,11 +95,11 @@ func TestFrameworkResourceToLoggable(t *testing.T) {
 					corev1.ResourceName("hugepages-2Mi"): 1 * 1024 * 1024 * 1024,
 				},
 			},
-			expected: ` logKey="TEST4" cpu="24000 (24)" memory="17179869184 (16 GiB)" hugepages-2Mi="1073741824 (1.0 GiB)"`,
+			expected: ` pod="namespace4/name4" podUID="uid4" cpu="24000 (24)" memory="17179869184 (16 GiB)" hugepages-2Mi="1073741824 (1.0 GiB)"`,
 		},
 		{
-			name:   "CPUs, Memory, hugepages-2Mi, hugepages-1Gi",
-			logKey: "TEST4",
+			name: "cpus, Memory, hugepages-2Mi, hugepages-1Gi",
+			pod:  makePod("uid5", "namespace5", "name5"),
 			resources: &framework.Resource{
 				MilliCPU: 24000,
 				Memory:   16 * 1024 * 1024 * 1024,
@@ -104,11 +108,11 @@ func TestFrameworkResourceToLoggable(t *testing.T) {
 					corev1.ResourceName("hugepages-1Gi"): 2 * 1024 * 1024 * 1024,
 				},
 			},
-			expected: ` logKey="TEST4" cpu="24000 (24)" memory="17179869184 (16 GiB)" hugepages-1Gi="2147483648 (2.0 GiB)" hugepages-2Mi="1073741824 (1.0 GiB)"`,
+			expected: ` pod="namespace5/name5" podUID="uid5" cpu="24000 (24)" memory="17179869184 (16 GiB)" hugepages-1Gi="2147483648 (2.0 GiB)" hugepages-2Mi="1073741824 (1.0 GiB)"`,
 		},
 		{
-			name:   "CPUs, Memory, hugepages-2Mi, devices",
-			logKey: "TEST4",
+			name: "cpus, Memory, hugepages-2Mi, devices",
+			pod:  makePod("uid6", "namespace6", "name6"),
 			resources: &framework.Resource{
 				MilliCPU: 24000,
 				Memory:   16 * 1024 * 1024 * 1024,
@@ -118,14 +122,14 @@ func TestFrameworkResourceToLoggable(t *testing.T) {
 					corev1.ResourceName("awesome.net/gpu"):       4,
 				},
 			},
-			expected: ` logKey="TEST4" cpu="24000 (24)" memory="17179869184 (16 GiB)" awesome.net/gpu="4" example.com/netdevice="16" hugepages-2Mi="1073741824 (1.0 GiB)"`,
+			expected: ` pod="namespace6/name6" podUID="uid6" cpu="24000 (24)" memory="17179869184 (16 GiB)" awesome.net/gpu="4" example.com/netdevice="16" hugepages-2Mi="1073741824 (1.0 GiB)"`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			keysAndValues := frameworkResourceToLoggable(tt.logKey, tt.resources)
+			keysAndValues := frameworkResourceToLoggable(tt.pod, tt.resources)
 			kvListFormat(&buf, keysAndValues...)
 			got := buf.String()
 			if got != tt.expected {
@@ -137,16 +141,14 @@ func TestFrameworkResourceToLoggable(t *testing.T) {
 
 func TestCheckRequest(t *testing.T) {
 	tests := []struct {
-		name       string
-		logKey     string
-		podRequest *framework.Resource
-		nodeInfo   *framework.NodeInfo
-		expected   []string
+		name     string
+		pod      *corev1.Pod
+		nodeInfo *framework.NodeInfo
+		expected []string
 	}{
 		{
-			name:       "empty",
-			logKey:     "",
-			podRequest: &framework.Resource{},
+			name: "empty",
+			pod:  makePod("uid0", "namespace0", "name0"),
 			nodeInfo: newNodeInfo(&corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node-0",
@@ -157,86 +159,77 @@ func TestCheckRequest(t *testing.T) {
 			},
 		},
 		{
-			name:   "cpu",
-			logKey: "",
-			podRequest: &framework.Resource{
-				MilliCPU: 2000,
-			},
+			name: "cpu",
+			pod: withRequest(makePod("uid1", "namespace1", "name1"), corev1.ResourceList{
+				corev1.ResourceCPU: resource.MustParse("2"),
+			}),
 			nodeInfo: newNodeInfo(&corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node-0",
 				},
 			}),
 			expected: []string{
-				`insufficient node resources" logKey="" node="node-0" resource="CPU"`,
+				`insufficient node resources" pod="namespace1/name1" podUID="uid1" node="node-0" resource="cpu"`,
 			},
 		},
 		{
-			name:   "memory",
-			logKey: "",
-			podRequest: &framework.Resource{
-				Memory: 8 * 1024 * 1024 * 1024,
-			},
+			name: "memory",
+			pod: withRequest(makePod("uid2", "namespace2", "name2"), corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("8Gi"),
+			}),
 			nodeInfo: newNodeInfo(&corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node-0",
 				},
 			}),
 			expected: []string{
-				`insufficient node resources" logKey="" node="node-0" resource="memory"`,
+				`insufficient node resources" pod="namespace2/name2" podUID="uid2" node="node-0" resource="memory"`,
 			},
 		},
 		{
-			name:   "devices",
-			logKey: "",
-			podRequest: &framework.Resource{
-				ScalarResources: map[corev1.ResourceName]int64{
-					corev1.ResourceName("example.com/device"): 2,
-				},
-			},
+			name: "devices",
+			pod: withRequest(makePod("uid3", "namespace3", "name3"), corev1.ResourceList{
+				corev1.ResourceName("example.com/device"): resource.MustParse("2"),
+			}),
 			nodeInfo: newNodeInfo(&corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node-0",
 				},
 			}),
 			expected: []string{
-				`insufficient node resources" logKey="" node="node-0" resource="example.com/device"`,
+				`insufficient node resources" pod="namespace3/name3" podUID="uid3" node="node-0" resource="example.com/device"`,
 			},
 		},
 		{
-			name:   "cpu and memory",
-			logKey: "",
-			podRequest: &framework.Resource{
-				MilliCPU: 4000,
-				Memory:   16 * 1024 * 1024 * 1024,
-			},
+			name: "cpu and memory",
+			pod: withRequest(makePod("uid4", "namespace4", "name4"), corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("4"),
+				corev1.ResourceMemory: resource.MustParse("16Gi"),
+			}),
 			nodeInfo: newNodeInfo(&corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node-0",
 				},
 			}),
 			expected: []string{
-				`insufficient node resources" logKey="" node="node-0" resource="memory"`,
-				`insufficient node resources" logKey="" node="node-0" resource="CPU"`,
+				`insufficient node resources" pod="namespace4/name4" podUID="uid4" node="node-0" resource="memory"`,
+				`insufficient node resources" pod="namespace4/name4" podUID="uid4" node="node-0" resource="cpu"`,
 			},
 		},
 		{
-			name:   "memory and devices",
-			logKey: "",
-			podRequest: &framework.Resource{
-				Memory: 16 * 1024 * 1024 * 1024,
-				ScalarResources: map[corev1.ResourceName]int64{
-					corev1.ResourceName("example.com/device"): 2,
-				},
-			},
+			name: "memory and devices",
+			pod: withRequest(makePod("uid5", "namespace5", "name5"), corev1.ResourceList{
+				corev1.ResourceMemory:                     resource.MustParse("16Gi"),
+				corev1.ResourceName("example.com/device"): resource.MustParse("2"),
+			}),
 			nodeInfo: newNodeInfo(&corev1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "node-0",
 				},
 			}),
 			expected: []string{
-				`insufficient node resources" logKey="" node="node-0" resource="example.com/device"`,
-				`insufficient node resources" logKey="" node="node-0" resource="memory"`,
+				`insufficient node resources" pod="namespace5/name5" podUID="uid5" node="node-0" resource="example.com/device"`,
+				`insufficient node resources" pod="namespace5/name5" podUID="uid5" node="node-0" resource="memory"`,
 			},
 		},
 	}
@@ -244,7 +237,7 @@ func TestCheckRequest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := runWithStderr(os.Stderr, func() error {
-				checkRequest(0, tt.logKey, tt.podRequest, tt.nodeInfo)
+				checkRequest(klog.FromContext(context.TODO()), tt.pod, tt.nodeInfo)
 				return nil
 			})
 			if err != nil {
@@ -323,4 +316,26 @@ func kvListFormat(b *bytes.Buffer, keysAndValues ...interface{}) {
 			}
 		}
 	}
+}
+
+func makePod(uid, namespace, name string) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+			UID:       types.UID(uid),
+		},
+	}
+}
+
+func withRequest(pod *corev1.Pod, rl corev1.ResourceList) *corev1.Pod {
+	pod.Spec.Containers = []corev1.Container{
+		{
+			Name: "cnt",
+			Resources: corev1.ResourceRequirements{
+				Requests: rl,
+			},
+		},
+	}
+	return pod
 }
