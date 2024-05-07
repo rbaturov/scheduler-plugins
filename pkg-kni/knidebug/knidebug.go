@@ -49,7 +49,7 @@ func (kd *KNIDebug) Name() string {
 }
 
 // New initializes a new plugin and returns it.
-func New(args runtime.Object, handle framework.Handle) (framework.Plugin, error) {
+func New(_ context.Context, args runtime.Object, handle framework.Handle) (framework.Plugin, error) {
 	klog.V(6).InfoS("Creating new KNIDebug plugin")
 	knifeatures.LogState(Name, 2, knifeatures.Names())
 	return &KNIDebug{}, nil
@@ -123,25 +123,26 @@ func (hc humanCPU) String() string {
 // the max in each dimension iteratively. In contrast, we sum the resource vectors for
 // regular containers since they run simultaneously.
 //
-// The resources defined for Overhead should be added to the calculated Resource request sum
+// # The resources defined for Overhead should be added to the calculated Resource request sum
 //
 // Example:
 //
 // Pod:
-//   InitContainers
-//     IC1:
-//       CPU: 2
-//       Memory: 1G
-//     IC2:
-//       CPU: 2
-//       Memory: 3G
-//   Containers
-//     C1:
-//       CPU: 2
-//       Memory: 1G
-//     C2:
-//       CPU: 1
-//       Memory: 1G
+//
+//	InitContainers
+//	  IC1:
+//	    CPU: 2
+//	    Memory: 1G
+//	  IC2:
+//	    CPU: 2
+//	    Memory: 3G
+//	Containers
+//	  C1:
+//	    CPU: 2
+//	    Memory: 1G
+//	  C2:
+//	    CPU: 1
+//	    Memory: 1G
 //
 // Result: CPU: 3, Memory: 3G
 func computePodResourceRequest(pod *corev1.Pod) *framework.Resource {

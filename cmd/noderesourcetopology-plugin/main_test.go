@@ -81,7 +81,7 @@ users:
 	// NodeResourceTopologyMatch plugin config
 	nodeResourceTopologyMatchConfigWithArgsFile := filepath.Join(tmpDir, "nodeResourceTopologyMatch.yaml")
 	if err := ioutil.WriteFile(nodeResourceTopologyMatchConfigWithArgsFile, []byte(fmt.Sprintf(`
-apiVersion: kubescheduler.config.k8s.io/v1beta3
+apiVersion: kubescheduler.config.k8s.io/v1
 kind: KubeSchedulerConfiguration
 clientConnection:
   kubeconfig: "%s"
@@ -104,7 +104,7 @@ profiles:
 	// Node Resource Topology profiles config
 	nrtProfilesConfig := filepath.Join(tmpDir, "multi-profiles.yaml")
 	if err := ioutil.WriteFile(nrtProfilesConfig, []byte(fmt.Sprintf(`
-apiVersion: kubescheduler.config.k8s.io/v1beta3
+apiVersion: kubescheduler.config.k8s.io/v1
 kind: KubeSchedulerConfiguration
 clientConnection:
   kubeconfig: "%s"
@@ -143,7 +143,7 @@ profiles:
 				"--kubeconfig", configKubeconfig,
 			},
 			wantPlugins: map[string]*config.Plugins{
-				"default-scheduler": defaults.ExpandedPluginsV1beta3,
+				"default-scheduler": defaults.ExpandedPluginsV1,
 			},
 		},
 		{
@@ -153,15 +153,15 @@ profiles:
 			wantPlugins: map[string]*config.Plugins{
 				"default-scheduler": {
 					PreEnqueue: config.PluginSet{Enabled: []config.Plugin{{Name: schedulinggates.Name}}},
-					QueueSort:  defaults.ExpandedPluginsV1beta3.QueueSort,
-					Bind:       defaults.ExpandedPluginsV1beta3.Bind,
-					PreFilter:  defaults.ExpandedPluginsV1beta3.PreFilter,
+					QueueSort:  defaults.ExpandedPluginsV1.QueueSort,
+					Bind:       defaults.ExpandedPluginsV1.Bind,
+					PreFilter:  defaults.ExpandedPluginsV1.PreFilter,
 					Filter:     config.PluginSet{Enabled: []config.Plugin{{Name: noderesourcetopology.Name}}},
-					PostFilter: defaults.ExpandedPluginsV1beta3.PostFilter,
-					PreScore:   defaults.ExpandedPluginsV1beta3.PreScore,
+					PostFilter: defaults.ExpandedPluginsV1.PostFilter,
+					PreScore:   defaults.ExpandedPluginsV1.PreScore,
 					Score:      config.PluginSet{Enabled: []config.Plugin{{Name: noderesourcetopology.Name, Weight: 1}}},
-					Reserve:    defaults.ExpandedPluginsV1beta3.Reserve,
-					PreBind:    defaults.ExpandedPluginsV1beta3.PreBind,
+					Reserve:    defaults.ExpandedPluginsV1.Reserve,
+					PreBind:    defaults.ExpandedPluginsV1.PreBind,
 				},
 			},
 		},
