@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/informers"
 	clientsetfake "k8s.io/client-go/kubernetes/fake"
 	clicache "k8s.io/client-go/tools/cache"
+	"k8s.io/kubernetes/pkg/scheduler/framework"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
 	"sigs.k8s.io/scheduler-plugins/apis/scheduling/v1alpha1"
 	tu "sigs.k8s.io/scheduler-plugins/test/util"
@@ -278,7 +279,7 @@ func TestPermit(t *testing.T) {
 				podInformer.Informer().GetStore().Add(p)
 			}
 
-			if got := pgMgr.Permit(ctx, tt.pod); got != tt.want {
+			if got := pgMgr.Permit(ctx, &framework.CycleState{}, tt.pod); got != tt.want {
 				t.Errorf("Want %v, but got %v", tt.want, got)
 			}
 		})
@@ -348,7 +349,7 @@ func TestCheckClusterResource(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			snapshotSharedLister := tu.NewFakeSharedLister(tt.existingPods, nodes)
 			nodeInfoList, _ := snapshotSharedLister.NodeInfos().List()
-			err := CheckClusterResource(nodeInfoList, tt.minResources, tt.pgName)
+			err := CheckClusterResource(context.Background(), nodeInfoList, tt.minResources, tt.pgName)
 			if (err == nil) != tt.want {
 				t.Errorf("Expect the cluster resource to be satified: %v, but got %v", tt.want, err == nil)
 			}
