@@ -23,6 +23,7 @@ import (
 	"strconv"
 
 	"github.com/dustin/go-humanize"
+	"github.com/go-logr/logr"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -39,8 +40,8 @@ var _ framework.FilterPlugin = &KNIDebug{}
 
 const (
 	// Name is the name of the plugin used in the plugin registry and configurations.
-	Name     string     = "KNIDebug"
-	LogLevel klog.Level = 6
+	Name     string = "KNIDebug"
+	LogLevel int    = 6
 )
 
 // Name returns name of the plugin. It is used in logs, etc.
@@ -65,22 +66,22 @@ func (kd *KNIDebug) EventsToRegister() []framework.ClusterEvent {
 }
 
 func (kd *KNIDebug) Filter(ctx context.Context, cycleState *framework.CycleState, pod *corev1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
+	lh := klog.FromContext(ctx)
 	node := nodeInfo.Node()
 	if node == nil {
 		// should never happen
 		return framework.NewStatus(framework.Error, "node not found")
 	}
 
-	logKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
 	// note the fit.go plugin computes this in the prefilter stage. Does this make any practical difference in our context?
-	req := computePodResourceRequest(pod)
-	checkRequest(LogLevel, logKey, req, nodeInfo)
+	checkRequest(lh.V(LogLevel), pod, nodeInfo)
 	return nil // must never fail
 }
 
-func frameworkResourceToLoggable(logKey string, req *framework.Resource) []interface{} {
+func frameworkResourceToLoggable(pod *corev1.Pod, req *framework.Resource) []interface{} {
 	items := []interface{}{
-		"logKey", logKey,
+		"pod", klog.KObj(pod).String(),
+		"podUID", podGetUID(pod),
 		"cpu", humanCPU(req.MilliCPU),
 		"memory", humanMemory(req.Memory),
 	}
@@ -163,27 +164,28 @@ func computePodResourceRequest(pod *corev1.Pod) *framework.Resource {
 }
 
 // see again fit.go for the skeleton code. Here we intentionally only log
-func checkRequest(logLevel klog.Level, logKey string, podRequest *framework.Resource, nodeInfo *framework.NodeInfo) {
-	if podRequest.MilliCPU == 0 && podRequest.Memory == 0 && podRequest.EphemeralStorage == 0 && len(podRequest.ScalarResources) == 0 {
-		klog.V(logLevel).InfoS("target resource requests none", "logKey", logKey)
+func checkRequest(lh logr.Logger, pod *corev1.Pod, nodeInfo *framework.NodeInfo) {
+	lh = lh.WithValues("pod", klog.KObj(pod), "podUID", podGetUID(pod), "node", nodeInfo.Node().Name)
+	req := computePodResourceRequest(pod)
+
+	if req.MilliCPU == 0 && req.Memory == 0 && req.EphemeralStorage == 0 && len(req.ScalarResources) == 0 {
+		lh.Info("target resource requests none")
 		return
 	}
-	klog.V(logLevel).InfoS("target resource requests", frameworkResourceToLoggable(logKey, podRequest)...)
-
-	nodeName := nodeInfo.Node().Name // shortcut
+	lh.Info("target resource requests", frameworkResourceToLoggable(pod, req)...)
 
 	violations := 0
-	if availCPU := (nodeInfo.Allocatable.MilliCPU - nodeInfo.Requested.MilliCPU); podRequest.MilliCPU > availCPU {
-		klog.V(logLevel).InfoS("insufficient node resources", "logKey", logKey, "node", nodeName, "resource", "CPU", "request", humanCPU(podRequest.MilliCPU), "available", humanCPU(availCPU))
+	if availCPU := (nodeInfo.Allocatable.MilliCPU - nodeInfo.Requested.MilliCPU); req.MilliCPU > availCPU {
+		lh.Info("insufficient node resources", "resource", "cpu", "request", humanCPU(req.MilliCPU), "available", humanCPU(availCPU))
 		violations++
 	}
-	if availMemory := (nodeInfo.Allocatable.Memory - nodeInfo.Requested.Memory); podRequest.Memory > availMemory {
-		klog.V(logLevel).InfoS("insufficient node resources", "logKey", logKey, "node", nodeName, "resource", "memory", "request", humanMemory(podRequest.Memory), "available", humanMemory(availMemory))
+	if availMemory := (nodeInfo.Allocatable.Memory - nodeInfo.Requested.Memory); req.Memory > availMemory {
+		lh.Info("insufficient node resources", "resource", "memory", "request", humanMemory(req.Memory), "available", humanMemory(availMemory))
 		violations++
 	}
-	for rName, rQuant := range podRequest.ScalarResources {
+	for rName, rQuant := range req.ScalarResources {
 		if availQuant := (nodeInfo.Allocatable.ScalarResources[rName] - nodeInfo.Requested.ScalarResources[rName]); rQuant > availQuant {
-			klog.V(logLevel).InfoS("insufficient node resources", "logKey", logKey, "node", nodeName, "resource", rName, "request", rQuant, "available", availQuant)
+			lh.Info("insufficient node resources", "resource", rName, "request", rQuant, "available", availQuant)
 			violations++
 		}
 	}
@@ -191,5 +193,12 @@ func checkRequest(logLevel klog.Level, logKey string, podRequest *framework.Reso
 	if violations > 0 {
 		return
 	}
-	klog.V(logLevel).InfoS("enough node resources", "logKey", logKey, "node", nodeName)
+	lh.Info("enough node resources")
+}
+
+func podGetUID(pod *corev1.Pod) string {
+	if pod == nil {
+		return "<nil>"
+	}
+	return string(pod.GetUID())
 }
