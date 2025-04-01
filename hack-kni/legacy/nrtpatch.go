@@ -39,6 +39,7 @@ func main() {
 	err := json.NewDecoder(os.Stdin).Decode(&nrt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "cannot decode object: %v\n", err)
+		os.Exit(1)
 	}
 	tm := nodeconfig.TopologyManagerFromNodeResourceTopology(logr.Discard(), &nrt)
 	fmt.Println(fmt.Sprintf(`kubectl patch noderesourcetopologies.topology.node.k8s.io %s --type=merge -p '{"topologyPolicies":["%s"]}'`, nrt.Name, toTopologyManagerPolicy(tm)))
