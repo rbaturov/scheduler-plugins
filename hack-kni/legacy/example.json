@@ -1,0 +1,103 @@
+{
+    "apiVersion": "topology.node.k8s.io/v1alpha2",
+    "attributes": [
+        {
+            "name": "nodeTopologyPodsFingerprint",
+            "value": "pfp0v001ad69e4281990b17e"
+        },
+        {
+            "name": "nodeTopologyPodsFingerprintMethod",
+            "value": "with-exclusive-resources"
+        },
+        {
+            "name": "topologyManagerScope",
+            "value": "container"
+        },
+        {
+            "name": "topologyManagerPolicy",
+            "value": "single-numa-node"
+        }
+    ],
+    "kind": "NodeResourceTopology",
+    "metadata": {
+        "annotations": {
+            "k8stopoawareschedwg/rte-update": "periodic",
+            "topology.node.k8s.io/fingerprint": "pfp0v001ad69e4281990b17e"
+        },
+        "creationTimestamp": "2025-02-04T08:21:30Z",
+        "generation": 316123,
+        "name": "node19.lab.example.com",
+        "resourceVersion": "49267399",
+        "uid": "b40b13d9-89f3-4c9e-958d-72cae30146dd"
+    },
+    "zones": [
+        {
+            "costs": [
+                {
+                    "name": "node-0",
+                    "value": 10
+                },
+                {
+                    "name": "node-1",
+                    "value": 21
+                }
+            ],
+            "name": "node-0",
+            "resources": [
+                {
+                    "allocatable": "8589934592",
+                    "available": "8589934592",
+                    "capacity": "8589934592",
+                    "name": "hugepages-1Gi"
+                },
+                {
+                    "allocatable": "39409012736",
+                    "available": "38603706368",
+                    "capacity": "49152380928",
+                    "name": "memory"
+                },
+                {
+                    "allocatable": "50",
+                    "available": "47",
+                    "capacity": "52",
+                    "name": "cpu"
+                }
+            ],
+            "type": "Node"
+        },
+        {
+            "costs": [
+                {
+                    "name": "node-0",
+                    "value": 21
+                },
+                {
+                    "name": "node-1",
+                    "value": 10
+                }
+            ],
+            "name": "node-1",
+            "resources": [
+                {
+                    "allocatable": "50",
+                    "available": "50",
+                    "capacity": "52",
+                    "name": "cpu"
+                },
+                {
+                    "allocatable": "8589934592",
+                    "available": "8589934592",
+                    "capacity": "8589934592",
+                    "name": "hugepages-1Gi"
+                },
+                {
+                    "allocatable": "42126929920",
+                    "available": "42126929920",
+                    "capacity": "50716864512",
+                    "name": "memory"
+                }
+            ],
+            "type": "Node"
+        }
+    ]
+}
