@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 
@@ -35,6 +36,9 @@ func toTopologyManagerPolicy(conf nodeconfig.TopologyManager) string {
 }
 
 func main() {
+	var rawMode = flag.Bool("R", false, "output raw policy value")
+	flag.Parse()
+
 	var nrt topologyv1alpha2.NodeResourceTopology
 	err := json.NewDecoder(os.Stdin).Decode(&nrt)
 	if err != nil {
@@ -42,5 +46,10 @@ func main() {
 		os.Exit(1)
 	}
 	tm := nodeconfig.TopologyManagerFromNodeResourceTopology(logr.Discard(), &nrt)
-	fmt.Println(fmt.Sprintf(`kubectl patch noderesourcetopologies.topology.node.k8s.io %s --type=merge -p '{"topologyPolicies":["%s"]}'`, nrt.Name, toTopologyManagerPolicy(tm)))
+	pol := toTopologyManagerPolicy(tm)
+	if *rawMode {
+		fmt.Println(pol)
+		os.Exit(0)
+	}
+	fmt.Println(fmt.Sprintf(`kubectl patch noderesourcetopologies.topology.node.k8s.io %s --type=merge -p '{"topologyPolicies":["%s"]}'`, nrt.Name, pol))
 }
