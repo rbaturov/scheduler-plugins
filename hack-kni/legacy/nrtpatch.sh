@@ -5,6 +5,11 @@ set -eu
 # check jq is available - requires set -e
 jq --version > /dev/null
 
+RAW=""
+if [[ "$1" == "-R" ]]; then
+	RAW="yes"
+fi
+
 INDATA=$(cat)
 
 NAME=$( echo "$INDATA" | jq -r '.metadata.name')
@@ -30,6 +35,11 @@ elif [[ $POLICY == "none" ]]; then
 else
 	echo "cannot decode JSON input"
 	exit 1
+fi
+
+if [[ "$RAW" == "yes" ]]; then
+	echo "$FIX"
+	exit 0
 fi
 
 echo "kubectl patch noderesourcetopologies.topology.node.k8s.io $NAME --type=merge -p '{\"topologyPolicies\":[\"$FIX\"]}'"
