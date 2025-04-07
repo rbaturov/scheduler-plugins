@@ -29,6 +29,8 @@ spec:
     value: 5d
   - name: dockerfile
     value: build/noderesourcetopology-plugin/Dockerfile.konflux
+  - name: build-source-image
+    value: "true"
   - name: hermetic
     value: "true"
   pipelineSpec:

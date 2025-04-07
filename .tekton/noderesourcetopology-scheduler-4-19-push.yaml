@@ -26,6 +26,8 @@ spec:
     value: quay.io/redhat-user-workloads/rh-ee-rbaturov-tenant/noderesourcetopology-scheduler-4-19:{{revision}}
   - name: dockerfile
     value: build/noderesourcetopology-plugin/Dockerfile.konflux
+  - name: build-source-image
+    value: "true"
   - name: hermetic
     value: "true"
   pipelineSpec:
