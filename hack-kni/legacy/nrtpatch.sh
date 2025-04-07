@@ -5,9 +5,11 @@ set -eu
 # check jq is available - requires set -e
 jq --version > /dev/null
 
-NAME=$( jq -r '.metadata.name' /dev/stdin )
-SCOPE=$( jq -r '.attributes[] | select(.name=="topologyManagerScope").value' /dev/stdin )
-POLICY=$( jq -r '.attributes[] | select(.name=="topologyManagerPolicy").value' /dev/stdin )
+INDATA=$(cat)
+
+NAME=$( echo "$INDATA" | jq -r '.metadata.name')
+SCOPE=$( echo "$INDATA" | jq -r '.attributes[] | select(.name=="topologyManagerScope").value' )
+POLICY=$( echo "$INDATA" | jq -r '.attributes[] | select(.name=="topologyManagerPolicy").value' )
 
 FIX=""
 if [[ $POLICY == "single-numa-node" && $SCOPE == "pod" ]]; then
