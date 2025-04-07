@@ -26,6 +26,8 @@ spec:
     value: quay.io/redhat-user-workloads/rh-ee-rbaturov-tenant/noderesourcetopology-scheduler-4-19:{{revision}}
   - name: dockerfile
     value: build/noderesourcetopology-plugin/Dockerfile.konflux
+  - name: hermetic
+    value: "true"
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while reducing network traffic.
