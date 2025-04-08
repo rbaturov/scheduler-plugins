@@ -29,10 +29,6 @@ spec:
     value: 5d
   - name: dockerfile
     value: build/noderesourcetopology-plugin/Dockerfile.konflux
-  - name: build-source-image
-    value: "true"
-  - name: hermetic
-    value: "true"
   pipelineSpec:
     description: |
       This pipeline is ideal for building container images from a Containerfile while reducing network traffic.
@@ -205,6 +201,11 @@ spec:
         - name: kind
           value: task
         resolver: bundles
+      when:
+      - input: $(params.prefetch-input)
+        operator: notin
+        values:
+        - ""
       workspaces:
       - name: source
         workspace: workspace
@@ -272,7 +273,7 @@ spec:
         - name: name
           value: build-image-index
         - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-build-image-index:0.1@sha256:95be274b6d0432d4671e2c41294ec345121bdf01284b1c6c46b5537dc6b37e15
+          value: quay.io/konflux-ci/tekton-catalog/task-build-image-index:0.1@sha256:ec1f33e2e358a5beac831685cf69cd63714d519620953cff48af9d74246118b5
         - name: kind
           value: task
         resolver: bundles
@@ -449,7 +450,7 @@ spec:
         - name: name
           value: sast-coverity-check
         - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-sast-coverity-check:0.2@sha256:b7c454f6138e279ac5ea169cfc60ef0bb5c091df84545488640f78d5d3ab8343
+          value: quay.io/konflux-ci/tekton-catalog/task-sast-coverity-check:0.2@sha256:d4fa3576baa2a7066d2a1840057836b90caee4d7ddf302bc1e93949cf8c12e04
         - name: kind
           value: task
         resolver: bundles
