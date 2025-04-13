@@ -140,7 +140,7 @@ require (
 	k8s.io/metrics v0.30.10 // indirect
 	k8s.io/mount-utils v0.30.10 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
-	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
+	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/release-utils v0.3.0 // indirect
 )
 
