@@ -3040,8 +3040,8 @@ k8s.io/gengo v0.0.0-20210813121822-485abfe95c7c/go.mod h1:FiNAH4ZV3gBg2Kwh89tzAE
 k8s.io/gengo/v2 v2.0.0-20240228010128-51d4e06bde70 h1:NGrVE502P0s0/1hudf8zjgwki1X/TByhmAoILTarmzo=
 k8s.io/gengo/v2 v2.0.0-20240228010128-51d4e06bde70/go.mod h1:VH3AT8AaQOqiGjMF9p0/IM1Dj+82ZwjfxUP1IxaHE+8=
 k8s.io/klog v0.3.0/go.mod h1:Gq+BEi5rUBO/HRz0bTSXDUcqjScdoY3a9IHpCEIOOfk=
-k8s.io/klog/hack/tools v0.0.0-20210917071902-331d2323a192 h1:u27Xm1of9MTDM1CZW3hg0Vv04ohywEG152G8mpr9n8Y=
-k8s.io/klog/hack/tools v0.0.0-20210917071902-331d2323a192/go.mod h1:DXW3Mv8xqJvjXWiBSBHrK2O4mq5LMD0clqkv3b1g9HA=
+k8s.io/klog/hack/tools v0.0.0-20220614110733-6b3fb0b85416 h1:CpYn6+0GGT0LK/iwgfXOLa0czafg3lD6vQrHjODYO8g=
+k8s.io/klog/hack/tools v0.0.0-20220614110733-6b3fb0b85416/go.mod h1:DXW3Mv8xqJvjXWiBSBHrK2O4mq5LMD0clqkv3b1g9HA=
 k8s.io/klog/v2 v2.0.0/go.mod h1:PBfzABfn139FHAV07az/IF9Wp1bkk3vpT2XSJ76fSDE=
 k8s.io/klog/v2 v2.2.0/go.mod h1:Od+F08eJP+W3HUb4pSrPpgp9DGU4GzlpG/TmITuYh/Y=
 k8s.io/klog/v2 v2.4.0/go.mod h1:Od+F08eJP+W3HUb4pSrPpgp9DGU4GzlpG/TmITuYh/Y=
