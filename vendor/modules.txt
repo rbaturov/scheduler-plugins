@@ -1348,9 +1348,10 @@ k8s.io/gengo/v2/generator
 k8s.io/gengo/v2/namer
 k8s.io/gengo/v2/parser
 k8s.io/gengo/v2/types
-# k8s.io/klog/hack/tools v0.0.0-20210917071902-331d2323a192
+# k8s.io/klog/hack/tools v0.0.0-20220614110733-6b3fb0b85416
 ## explicit; go 1.15
 k8s.io/klog/hack/tools/logcheck
+k8s.io/klog/hack/tools/logcheck/pkg
 # k8s.io/klog/v2 v2.120.1
 ## explicit; go 1.18
 k8s.io/klog/v2

@@ -23,7 +23,7 @@ require (
 	k8s.io/code-generator v0.30.10
 	k8s.io/component-base v0.30.10
 	k8s.io/component-helpers v0.30.10
-	k8s.io/klog/hack/tools v0.0.0-20210917071902-331d2323a192
+	k8s.io/klog/hack/tools v0.0.0-20220614110733-6b3fb0b85416
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/kube-scheduler v0.30.10
 	k8s.io/kubernetes v1.30.10
