@@ -53,6 +53,7 @@ var (
 )
 
 type TargetLoadPacking struct {
+	logger       klog.Logger
 	handle       framework.Handle
 	eventHandler *trimaran.PodAssignEventHandler
 	collector    *trimaran.Collector
@@ -61,14 +62,15 @@ type TargetLoadPacking struct {
 
 var _ framework.ScorePlugin = &TargetLoadPacking{}
 
-func New(_ context.Context, obj runtime.Object, handle framework.Handle) (framework.Plugin, error) {
-	klog.V(4).InfoS("Creating new instance of the TargetLoadPacking plugin")
+func New(ctx context.Context, obj runtime.Object, handle framework.Handle) (framework.Plugin, error) {
+	logger := klog.FromContext(ctx).WithValues("plugin", Name)
+	logger.V(4).Info("Creating new instance of the TargetLoadPacking plugin")
 	// cast object into plugin arguments object
 	args, ok := obj.(*pluginConfig.TargetLoadPackingArgs)
 	if !ok {
 		return nil, fmt.Errorf("want args to be of type TargetLoadPackingArgs, got %T", obj)
 	}
-	collector, err := trimaran.NewCollector(&args.TrimaranSpec)
+	collector, err := trimaran.NewCollector(logger, &args.TrimaranSpec)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +82,7 @@ func New(_ context.Context, obj runtime.Object, handle framework.Handle) (framew
 		return nil, errors.New("unable to parse DefaultRequestsMultiplier: " + err.Error())
 	}
 
-	klog.V(4).InfoS("Using TargetLoadPackingArgs",
+	logger.V(4).Info("Using TargetLoadPackingArgs",
 		"requestsMilliCores", requestsMilliCores,
 		"requestsMultiplier", requestsMultiplier,
 		"targetUtilization", hostTargetUtilizationPercent)
@@ -89,6 +91,7 @@ func New(_ context.Context, obj runtime.Object, handle framework.Handle) (framew
 	podAssignEventHandler.AddToHandle(handle)
 
 	pl := &TargetLoadPacking{
+		logger:       logger,
 		handle:       handle,
 		eventHandler: podAssignEventHandler,
 		collector:    collector,
@@ -102,6 +105,7 @@ func (pl *TargetLoadPacking) Name() string {
 }
 
 func (pl *TargetLoadPacking) Score(ctx context.Context, cycleState *framework.CycleState, pod *v1.Pod, nodeName string) (int64, *framework.Status) {
+	logger := klog.FromContext(klog.NewContext(ctx, pl.logger)).WithValues("ExtensionPoint", "Score")
 	score := framework.MinNodeScore
 	nodeInfo, err := pl.handle.SnapshotSharedLister().NodeInfos().Get(nodeName)
 	if err != nil {
@@ -109,7 +113,7 @@ func (pl *TargetLoadPacking) Score(ctx context.Context, cycleState *framework.Cy
 	}
 
 	// get node metrics
-	metrics, allMetrics := pl.collector.GetNodeMetrics(nodeName)
+	metrics, allMetrics := pl.collector.GetNodeMetrics(logger, nodeName)
 	if metrics == nil {
 		klog.InfoS("Failed to get metrics for node; using minimum score", "nodeName", nodeName)
 		// Avoid the node by scoring minimum
@@ -122,7 +126,7 @@ func (pl *TargetLoadPacking) Score(ctx context.Context, cycleState *framework.Cy
 	for _, container := range pod.Spec.Containers {
 		curPodCPUUsage += PredictUtilisation(&container)
 	}
-	klog.V(6).InfoS("Predicted utilization for pod", "podName", pod.Name, "cpuUsage", curPodCPUUsage)
+	logger.V(6).Info("Predicted utilization for pod", "podName", pod.Name, "cpuUsage", curPodCPUUsage)
 	if pod.Spec.Overhead != nil {
 		curPodCPUUsage += pod.Spec.Overhead.Cpu().MilliValue()
 	}
@@ -139,13 +143,13 @@ func (pl *TargetLoadPacking) Score(ctx context.Context, cycleState *framework.Cy
 	}
 
 	if !cpuMetricFound {
-		klog.ErrorS(nil, "Cpu metric not found in node metrics", "nodeName", nodeName, "nodeMetrics", metrics)
+		logger.Error(nil, "Cpu metric not found in node metrics", "nodeName", nodeName, "nodeMetrics", metrics)
 		return score, nil
 	}
 	nodeCPUCapMillis := float64(nodeInfo.Node().Status.Capacity.Cpu().MilliValue())
 	nodeCPUUtilMillis := (nodeCPUUtilPercent / 100) * nodeCPUCapMillis
 
-	klog.V(6).InfoS("Calculating CPU utilization and capacity", "nodeName", nodeName, "cpuUtilMillis", nodeCPUUtilMillis, "cpuCapMillis", nodeCPUCapMillis)
+	logger.V(6).Info("Calculating CPU utilization and capacity", "nodeName", nodeName, "cpuUtilMillis", nodeCPUUtilMillis, "cpuCapMillis", nodeCPUCapMillis)
 
 	var missingCPUUtilMillis int64 = 0
 	pl.eventHandler.RLock()
@@ -160,11 +164,11 @@ func (pl *TargetLoadPacking) Score(ctx context.Context, cycleState *framework.Cy
 				missingCPUUtilMillis += PredictUtilisation(&container)
 			}
 			missingCPUUtilMillis += info.Pod.Spec.Overhead.Cpu().MilliValue()
-			klog.V(6).InfoS("Missing utilization for pod", "podName", info.Pod.Name, "missingCPUUtilMillis", missingCPUUtilMillis)
+			logger.V(6).Info("Missing utilization for pod", "podName", info.Pod.Name, "missingCPUUtilMillis", missingCPUUtilMillis)
 		}
 	}
 	pl.eventHandler.RUnlock()
-	klog.V(6).InfoS("Missing utilization for node", "nodeName", nodeName, "missingCPUUtilMillis", missingCPUUtilMillis)
+	logger.V(6).Info("Missing utilization for node", "nodeName", nodeName, "missingCPUUtilMillis", missingCPUUtilMillis)
 
 	var predictedCPUUsage float64
 	if nodeCPUCapMillis != 0 {
@@ -175,13 +179,13 @@ func (pl *TargetLoadPacking) Score(ctx context.Context, cycleState *framework.Cy
 			return score, framework.NewStatus(framework.Success, "")
 		}
 		penalisedScore := int64(math.Round(float64(hostTargetUtilizationPercent) * (100 - predictedCPUUsage) / (100 - float64(hostTargetUtilizationPercent))))
-		klog.V(6).InfoS("Penalised score for host", "nodeName", nodeName, "penalisedScore", penalisedScore)
+		logger.V(6).Info("Penalised score for host", "nodeName", nodeName, "penalisedScore", penalisedScore)
 		return penalisedScore, framework.NewStatus(framework.Success, "")
 	}
 
 	score = int64(math.Round((100-float64(hostTargetUtilizationPercent))*
 		predictedCPUUsage/float64(hostTargetUtilizationPercent) + float64(hostTargetUtilizationPercent)))
-	klog.V(6).InfoS("Score for host", "nodeName", nodeName, "score", score)
+	logger.V(6).Info("Score for host", "nodeName", nodeName, "score", score)
 	return score, framework.NewStatus(framework.Success, "")
 }
 
