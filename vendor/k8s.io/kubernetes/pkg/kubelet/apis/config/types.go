@@ -408,8 +408,6 @@ type KubeletConfiguration struct {
 	EnableSystemLogHandler bool
 	// EnableSystemLogQuery enables the node log query feature on the /logs endpoint.
 	// EnableSystemLogHandler has to be enabled in addition for this feature to work.
-	// Enabling this feature has security implications. The recommendation is to enable it on a need basis for debugging
-	// purposes and disabling otherwise.
 	// +featureGate=NodeLogQuery
 	// +optional
 	EnableSystemLogQuery bool

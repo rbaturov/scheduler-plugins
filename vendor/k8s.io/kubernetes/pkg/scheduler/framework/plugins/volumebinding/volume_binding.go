@@ -194,6 +194,14 @@ func (pl *VolumeBinding) PreFilter(ctx context.Context, state *framework.CycleSt
 		status.AppendReason("pod has unbound immediate PersistentVolumeClaims")
 		return nil, status
 	}
+	// Attempt to reduce down the number of nodes to consider in subsequent scheduling stages if pod has bound claims.
+	var result *framework.PreFilterResult
+	if eligibleNodes := pl.Binder.GetEligibleNodes(logger, podVolumeClaims.boundClaims); eligibleNodes != nil {
+		result = &framework.PreFilterResult{
+			NodeNames: eligibleNodes,
+		}
+	}
+
 	state.Write(stateKey, &stateData{
 		podVolumesByNode: make(map[string]*PodVolumes),
 		podVolumeClaims: &PodVolumeClaims{
@@ -202,7 +210,7 @@ func (pl *VolumeBinding) PreFilter(ctx context.Context, state *framework.CycleSt
 			unboundVolumesDelayBinding: podVolumeClaims.unboundVolumesDelayBinding,
 		},
 	})
-	return nil, nil
+	return result, nil
 }
 
 // PreFilterExtensions returns prefilter extensions, pod add and remove.
