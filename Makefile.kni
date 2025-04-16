@@ -57,7 +57,7 @@ build-noderesourcetopology-image: clean
 
 .PHONY: update-vendor
 update-vendor:
-	hack/update-vendor.sh
+	hack-kni/update-vendor.sh
 
 .PHONY: unit-test
 unit-test: update-vendor
