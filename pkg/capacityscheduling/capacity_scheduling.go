@@ -58,6 +58,7 @@ func init() {
 // CapacityScheduling is a plugin that implements the mechanism of capacity scheduling.
 type CapacityScheduling struct {
 	sync.RWMutex
+	logger            klog.Logger
 	fh                framework.Handle
 	podLister         corelisters.PodLister
 	pdbLister         policylisters.PodDisruptionBudgetLister
@@ -119,12 +120,15 @@ func (c *CapacityScheduling) Name() string {
 
 // New initializes a new plugin and returns it.
 func New(ctx context.Context, obj runtime.Object, handle framework.Handle) (framework.Plugin, error) {
+	lh := klog.FromContext(ctx).WithValues("plugin", Name)
 	c := &CapacityScheduling{
+		logger:            lh,
 		fh:                handle,
 		elasticQuotaInfos: NewElasticQuotaInfos(),
 		podLister:         handle.SharedInformerFactory().Core().V1().Pods().Lister(),
 		pdbLister:         getPDBLister(handle.SharedInformerFactory()),
 	}
+	logger := klog.FromContext(ctx)
 
 	client, err := client.New(handle.KubeConfig(), client.Options{Scheme: scheme})
 	if err != nil {
@@ -187,11 +191,11 @@ func New(ctx context.Context, obj runtime.Object, handle framework.Handle) (fram
 			},
 		},
 	)
-	klog.InfoS("CapacityScheduling start")
+	logger.Info("CapacityScheduling start")
 	return c, nil
 }
 
-func (c *CapacityScheduling) EventsToRegister() []framework.ClusterEventWithHint {
+func (c *CapacityScheduling) EventsToRegister(_ context.Context) ([]framework.ClusterEventWithHint, error) {
 	// To register a custom event, follow the naming convention at:
 	// https://github.com/kubernetes/kubernetes/pull/101394
 	// Please follow: eventhandlers.go#L403-L410
@@ -199,7 +203,7 @@ func (c *CapacityScheduling) EventsToRegister() []framework.ClusterEventWithHint
 	return []framework.ClusterEventWithHint{
 		{Event: framework.ClusterEvent{Resource: framework.Pod, ActionType: framework.Delete}},
 		{Event: framework.ClusterEvent{Resource: framework.GVK(eqGVK), ActionType: framework.All}},
-	}
+	}, nil
 }
 
 // PreFilter performs the following validations.
@@ -288,9 +292,11 @@ func (c *CapacityScheduling) PreFilterExtensions() framework.PreFilterExtensions
 
 // AddPod from pre-computed data in cycleState.
 func (c *CapacityScheduling) AddPod(ctx context.Context, cycleState *framework.CycleState, podToSchedule *v1.Pod, podToAdd *framework.PodInfo, nodeInfo *framework.NodeInfo) *framework.Status {
+	logger := klog.FromContext(klog.NewContext(ctx, c.logger))
+
 	elasticQuotaSnapshotState, err := getElasticQuotaSnapshotState(cycleState)
 	if err != nil {
-		klog.ErrorS(err, "Failed to read elasticQuotaSnapshot from cycleState", "elasticQuotaSnapshotKey", ElasticQuotaSnapshotKey)
+		logger.Error(err, "Failed to read elasticQuotaSnapshot from cycleState", "elasticQuotaSnapshotKey", ElasticQuotaSnapshotKey)
 		return framework.NewStatus(framework.Error, err.Error())
 	}
 
@@ -298,7 +304,7 @@ func (c *CapacityScheduling) AddPod(ctx context.Context, cycleState *framework.C
 	if elasticQuotaInfo != nil {
 		err := elasticQuotaInfo.addPodIfNotPresent(podToAdd.Pod)
 		if err != nil {
-			klog.ErrorS(err, "Failed to add Pod to its associated elasticQuota", "pod", klog.KObj(podToAdd.Pod))
+			logger.Error(err, "Failed to add Pod to its associated elasticQuota", "pod", klog.KObj(podToAdd.Pod))
 		}
 	}
 
@@ -307,9 +313,11 @@ func (c *CapacityScheduling) AddPod(ctx context.Context, cycleState *framework.C
 
 // RemovePod from pre-computed data in cycleState.
 func (c *CapacityScheduling) RemovePod(ctx context.Context, cycleState *framework.CycleState, podToSchedule *v1.Pod, podToRemove *framework.PodInfo, nodeInfo *framework.NodeInfo) *framework.Status {
+	logger := klog.FromContext(klog.NewContext(ctx, c.logger))
+
 	elasticQuotaSnapshotState, err := getElasticQuotaSnapshotState(cycleState)
 	if err != nil {
-		klog.ErrorS(err, "Failed to read elasticQuotaSnapshot from cycleState", "elasticQuotaSnapshotKey", ElasticQuotaSnapshotKey)
+		logger.Error(err, "Failed to read elasticQuotaSnapshot from cycleState", "elasticQuotaSnapshotKey", ElasticQuotaSnapshotKey)
 		return framework.NewStatus(framework.Error, err.Error())
 	}
 
@@ -317,7 +325,7 @@ func (c *CapacityScheduling) RemovePod(ctx context.Context, cycleState *framewor
 	if elasticQuotaInfo != nil {
 		err = elasticQuotaInfo.deletePodIfPresent(podToRemove.Pod)
 		if err != nil {
-			klog.ErrorS(err, "Failed to delete Pod from its associated elasticQuota", "pod", klog.KObj(podToRemove.Pod))
+			logger.Error(err, "Failed to delete Pod from its associated elasticQuota", "pod", klog.KObj(podToRemove.Pod))
 		}
 	}
 
@@ -336,8 +344,9 @@ func (c *CapacityScheduling) PostFilter(ctx context.Context, state *framework.Cy
 		PdbLister:  c.pdbLister,
 		State:      state,
 		Interface: &preemptor{
-			fh:    c.fh,
-			state: state,
+			logger: c.logger,
+			fh:     c.fh,
+			state:  state,
 		},
 	}
 
@@ -347,12 +356,13 @@ func (c *CapacityScheduling) PostFilter(ctx context.Context, state *framework.Cy
 func (c *CapacityScheduling) Reserve(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeName string) *framework.Status {
 	c.Lock()
 	defer c.Unlock()
+	logger := klog.FromContext(klog.NewContext(ctx, c.logger)).WithValues("ExtensionPoint", "Reserve")
 
 	elasticQuotaInfo := c.elasticQuotaInfos[pod.Namespace]
 	if elasticQuotaInfo != nil {
 		err := elasticQuotaInfo.addPodIfNotPresent(pod)
 		if err != nil {
-			klog.ErrorS(err, "Failed to add Pod to its associated elasticQuota", "pod", klog.KObj(pod))
+			logger.Error(err, "Failed to add Pod to its associated elasticQuota", "pod", klog.KObj(pod))
 			return framework.NewStatus(framework.Error, err.Error())
 		}
 	}
@@ -363,18 +373,21 @@ func (c *CapacityScheduling) Unreserve(ctx context.Context, state *framework.Cyc
 	c.Lock()
 	defer c.Unlock()
 
+	logger := klog.FromContext(ctx)
+
 	elasticQuotaInfo := c.elasticQuotaInfos[pod.Namespace]
 	if elasticQuotaInfo != nil {
 		err := elasticQuotaInfo.deletePodIfPresent(pod)
 		if err != nil {
-			klog.ErrorS(err, "Failed to delete Pod from its associated elasticQuota", "pod", klog.KObj(pod))
+			logger.Error(err, "Failed to delete Pod from its associated elasticQuota", "pod", klog.KObj(pod))
 		}
 	}
 }
 
 type preemptor struct {
-	fh    framework.Handle
-	state *framework.CycleState
+	logger klog.Logger
+	fh     framework.Handle
+	state  *framework.CycleState
 }
 
 func (p *preemptor) OrderedScoreFuncs(ctx context.Context, nodesToVictims map[string]*extenderv1.Victims) []func(node string) int64 {
@@ -400,14 +413,16 @@ func (p *preemptor) CandidatesToVictimsMap(candidates []preemption.Candidate) ma
 // We look at the node that is nominated for this pod and as long as there are
 // terminating pods on the node, we don't consider this for preempting more pods.
 func (p *preemptor) PodEligibleToPreemptOthers(pod *v1.Pod, nominatedNodeStatus *framework.Status) (bool, string) {
+	logger := p.logger
+
 	if pod.Spec.PreemptionPolicy != nil && *pod.Spec.PreemptionPolicy == v1.PreemptNever {
-		klog.V(5).InfoS("Pod is not eligible for preemption because of its preemptionPolicy", "pod", klog.KObj(pod), "preemptionPolicy", v1.PreemptNever)
+		logger.V(5).Info("Pod is not eligible for preemption because of its preemptionPolicy", "pod", klog.KObj(pod), "preemptionPolicy", v1.PreemptNever)
 		return false, "not eligible due to preemptionPolicy=Never."
 	}
 
 	preFilterState, err := getPreFilterState(p.state)
 	if err != nil {
-		klog.V(5).InfoS("Failed to read preFilterState from cycleState, err: %s", err, "preFilterStateKey", preFilterStateKey)
+		logger.V(5).Error(err, "Failed to read preFilterState from cycleState", "preFilterStateKey", preFilterStateKey)
 		return false, "not eligible due to failed to read from cycleState"
 	}
 
@@ -422,7 +437,7 @@ func (p *preemptor) PodEligibleToPreemptOthers(pod *v1.Pod, nominatedNodeStatus 
 
 		elasticQuotaSnapshotState, err := getElasticQuotaSnapshotState(p.state)
 		if err != nil {
-			klog.ErrorS(err, "Failed to read elasticQuotaSnapshot from cycleState", "elasticQuotaSnapshotKey", ElasticQuotaSnapshotKey)
+			logger.Error(err, "Failed to read elasticQuotaSnapshot from cycleState", "elasticQuotaSnapshotKey", ElasticQuotaSnapshotKey)
 			return true, ""
 		}
 
@@ -480,17 +495,20 @@ func (p *preemptor) SelectVictimsOnNode(
 	pod *v1.Pod,
 	nodeInfo *framework.NodeInfo,
 	pdbs []*policy.PodDisruptionBudget) ([]*v1.Pod, int, *framework.Status) {
+
+	logger := p.logger
+
 	elasticQuotaSnapshotState, err := getElasticQuotaSnapshotState(state)
 	if err != nil {
 		msg := "Failed to read elasticQuotaSnapshot from cycleState"
-		klog.ErrorS(err, msg, "elasticQuotaSnapshotKey", ElasticQuotaSnapshotKey)
+		logger.Error(err, msg, "elasticQuotaSnapshotKey", ElasticQuotaSnapshotKey)
 		return nil, 0, framework.NewStatus(framework.Unschedulable, msg)
 	}
 
 	preFilterState, err := getPreFilterState(state)
 	if err != nil {
 		msg := "Failed to read preFilterState from cycleState"
-		klog.ErrorS(err, msg, "preFilterStateKey", preFilterStateKey)
+		logger.Error(err, msg, "preFilterStateKey", preFilterStateKey)
 		return nil, 0, framework.NewStatus(framework.Unschedulable, msg)
 	}
 
@@ -498,7 +516,6 @@ func (p *preemptor) SelectVictimsOnNode(
 	var nominatedPodsReqWithPodReq framework.Resource
 	podReq := preFilterState.podReq
 
-	logger := klog.FromContext(ctx)
 	removePod := func(rpi *framework.PodInfo) error {
 		if err := nodeInfo.RemovePod(logger, rpi.Pod); err != nil {
 			return err
@@ -607,6 +624,8 @@ func (p *preemptor) SelectVictimsOnNode(
 
 	var victims []*v1.Pod
 	numViolatingVictim := 0
+	// Sort potentialVictims by pod priority from high to low, which ensures to
+	// reprieve higher priority pods first.
 	sort.Slice(potentialVictims, func(i, j int) bool {
 		return schedutil.MoreImportantPod(potentialVictims[i].Pod, potentialVictims[j].Pod)
 	})
@@ -625,7 +644,7 @@ func (p *preemptor) SelectVictimsOnNode(
 				return false, err
 			}
 			victims = append(victims, pi.Pod)
-			klog.V(5).InfoS("Found a potential preemption victim on node", "pod", klog.KObj(pi.Pod), "node", klog.KObj(nodeInfo.Node()))
+			logger.V(5).Info("Found a potential preemption victim on node", "pod", klog.KObj(pi.Pod), "node", klog.KObj(nodeInfo.Node()))
 		}
 
 		if preemptorWithElasticQuota && (preemptorElasticQuotaInfo.usedOverMaxWith(&nominatedPodsReqInEQWithPodReq) || elasticQuotaInfos.aggregatedUsedOverMinWith(nominatedPodsReqWithPodReq)) {
@@ -633,14 +652,14 @@ func (p *preemptor) SelectVictimsOnNode(
 				return false, err
 			}
 			victims = append(victims, pi.Pod)
-			klog.V(5).InfoS("Found a potential preemption victim on node", "pod", klog.KObj(pi.Pod), " node", klog.KObj(nodeInfo.Node()))
+			logger.V(5).Info("Found a potential preemption victim on node", "pod", klog.KObj(pi.Pod), " node", klog.KObj(nodeInfo.Node()))
 		}
 
 		return fits, nil
 	}
 	for _, pi := range violatingVictims {
 		if fits, err := reprievePod(pi); err != nil {
-			klog.ErrorS(err, "Failed to reprieve pod", "pod", klog.KObj(pi.Pod))
+			logger.Error(err, "Failed to reprieve pod", "pod", klog.KObj(pi.Pod))
 			return nil, 0, framework.AsStatus(err)
 		} else if !fits {
 			numViolatingVictim++
@@ -649,9 +668,14 @@ func (p *preemptor) SelectVictimsOnNode(
 	// Now we try to reprieve non-violating victims.
 	for _, pi := range nonViolatingVictims {
 		if _, err := reprievePod(pi); err != nil {
-			klog.ErrorS(err, "Failed to reprieve pod", "pod", klog.KObj(pi.Pod))
+			logger.Error(err, "Failed to reprieve pod", "pod", klog.KObj(pi.Pod))
 			return nil, 0, framework.AsStatus(err)
 		}
+	}
+
+	// Sort victims after reprieving pods to keep the pods in the victims sorted in order of priority from high to low.
+	if len(violatingVictims) != 0 && len(nonViolatingVictims) != 0 {
+		sort.Slice(victims, func(i, j int) bool { return schedutil.MoreImportantPod(victims[i], victims[j]) })
 	}
 	return victims, numViolatingVictim, framework.NewStatus(framework.Success)
 }
@@ -694,6 +718,9 @@ func (c *CapacityScheduling) deleteElasticQuota(obj interface{}) {
 }
 
 func (c *CapacityScheduling) addPod(obj interface{}) {
+	ctx := context.TODO()
+	logger := klog.FromContext(ctx)
+
 	pod := obj.(*v1.Pod)
 
 	c.Lock()
@@ -703,8 +730,8 @@ func (c *CapacityScheduling) addPod(obj interface{}) {
 	// If elasticQuotaInfo is nil, try to list ElasticQuotas through elasticQuotaLister
 	if elasticQuotaInfo == nil {
 		var eqList v1alpha1.ElasticQuotaList
-		if err := c.client.List(context.Background(), &eqList, client.InNamespace(pod.Namespace)); err != nil {
-			klog.ErrorS(err, "Failed to get elasticQuota", "elasticQuota", pod.Namespace)
+		if err := c.client.List(ctx, &eqList, client.InNamespace(pod.Namespace)); err != nil {
+			logger.Error(err, "Failed to get elasticQuota", "elasticQuota", pod.Namespace)
 			return
 		}
 
@@ -724,11 +751,13 @@ func (c *CapacityScheduling) addPod(obj interface{}) {
 
 	err := elasticQuotaInfo.addPodIfNotPresent(pod)
 	if err != nil {
-		klog.ErrorS(err, "Failed to add Pod to its associated elasticQuota", "pod", klog.KObj(pod))
+		logger.Error(err, "Failed to add Pod to its associated elasticQuota", "pod", klog.KObj(pod))
 	}
 }
 
 func (c *CapacityScheduling) updatePod(oldObj, newObj interface{}) {
+	logger := klog.FromContext(context.TODO())
+
 	oldPod := oldObj.(*v1.Pod)
 	newPod := newObj.(*v1.Pod)
 
@@ -744,13 +773,15 @@ func (c *CapacityScheduling) updatePod(oldObj, newObj interface{}) {
 		if elasticQuotaInfo != nil {
 			err := elasticQuotaInfo.deletePodIfPresent(newPod)
 			if err != nil {
-				klog.ErrorS(err, "Failed to delete Pod from its associated elasticQuota", "pod", klog.KObj(newPod))
+				logger.Error(err, "Failed to delete Pod from its associated elasticQuota", "pod", klog.KObj(newPod))
 			}
 		}
 	}
 }
 
 func (c *CapacityScheduling) deletePod(obj interface{}) {
+	logger := klog.FromContext(context.TODO())
+
 	pod := obj.(*v1.Pod)
 	c.Lock()
 	defer c.Unlock()
@@ -759,7 +790,7 @@ func (c *CapacityScheduling) deletePod(obj interface{}) {
 	if elasticQuotaInfo != nil {
 		err := elasticQuotaInfo.deletePodIfPresent(pod)
 		if err != nil {
-			klog.ErrorS(err, "Failed to delete Pod from its associated elasticQuota", "pod", klog.KObj(pod))
+			logger.Error(err, "Failed to delete Pod from its associated elasticQuota", "pod", klog.KObj(pod))
 		}
 	}
 }

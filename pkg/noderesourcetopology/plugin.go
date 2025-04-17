@@ -53,6 +53,7 @@ type scoringFn func(logr.Logger, *v1.Pod, topologyv1alpha2.ZoneList) (int64, *fr
 
 // TopologyMatch plugin which run simplified version of TopologyManager's admit handler
 type TopologyMatch struct {
+	logger              klog.Logger
 	resourceToWeightMap resourceToWeightMap
 	nrtCache            nrtcache.Interface
 	scoreStrategyFunc   scoreStrategyFn
@@ -72,7 +73,7 @@ func (tm *TopologyMatch) Name() string {
 
 // New initializes a new plugin and returns it.
 func New(ctx context.Context, args runtime.Object, handle framework.Handle) (framework.Plugin, error) {
-	lh := klog.FromContext(ctx)
+	lh := klog.FromContext(ctx).WithValues("plugin", Name)
 
 	lh.V(5).Info("creating new noderesourcetopology plugin")
 	tcfg, ok := args.(*apiconfig.NodeResourceTopologyMatchArgs)
@@ -106,6 +107,7 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 	}
 
 	topologyMatch := &TopologyMatch{
+		logger:              lh,
 		resourceToWeightMap: resToWeightMap,
 		nrtCache:            nrtCache,
 		scoreStrategyFunc:   strategy,
@@ -120,7 +122,7 @@ func New(ctx context.Context, args runtime.Object, handle framework.Handle) (fra
 // NOTE: if in-place-update (KEP 1287) gets implemented, then PodUpdate event
 // should be registered for this plugin since a Pod update may free up resources
 // that make other Pods schedulable.
-func (tm *TopologyMatch) EventsToRegister() []framework.ClusterEventWithHint {
+func (tm *TopologyMatch) EventsToRegister(_ context.Context) ([]framework.ClusterEventWithHint, error) {
 	// To register a custom event, follow the naming convention at:
 	// https://github.com/kubernetes/kubernetes/pull/101394
 	// Please follow: eventhandlers.go#L403-L410
@@ -129,5 +131,5 @@ func (tm *TopologyMatch) EventsToRegister() []framework.ClusterEventWithHint {
 		{Event: framework.ClusterEvent{Resource: framework.Pod, ActionType: framework.Delete}},
 		{Event: framework.ClusterEvent{Resource: framework.Node, ActionType: framework.Add | framework.UpdateNodeAllocatable}},
 		{Event: framework.ClusterEvent{Resource: framework.GVK(nrtGVK), ActionType: framework.Add | framework.Update}},
-	}
+	}, nil
 }
