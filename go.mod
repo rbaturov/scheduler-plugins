@@ -135,7 +135,7 @@ require (
 	k8s.io/dynamic-resource-allocation v0.30.10 // indirect
 	k8s.io/gengo/v2 v2.0.0-20240228010128-51d4e06bde70 // indirect
 	k8s.io/kms v0.30.10 // indirect
-	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
+	k8s.io/kube-openapi c8a335a9a2ff // indirect
 	k8s.io/kubelet v0.30.10 // indirect
 	k8s.io/metrics v0.30.10 // indirect
 	k8s.io/mount-utils v0.30.10 // indirect
