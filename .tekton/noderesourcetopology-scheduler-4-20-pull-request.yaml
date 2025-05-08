@@ -34,6 +34,8 @@ spec:
     value: build/noderesourcetopology-plugin/konflux.Dockerfile
   - name: build-source-image
     value: "true"
+  - name: hermetic
+    value: "true"
   pipelineRef:
     name: build-pipeline
   taskRunTemplate:
