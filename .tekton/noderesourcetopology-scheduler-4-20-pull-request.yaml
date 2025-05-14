@@ -8,8 +8,25 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "master"
+    pipelinesascode.tekton.dev/on-cel-expression: |
+      event == "pull_request" && 
+      target_branch == "master" && 
+      (
+        '.tekton/build-pipeline.yaml'.pathChanged() ||
+        '.tekton/noderesourcetopology-scheduler-4-20-pull-request.yaml'.pathChanged() ||
+        'apis/***'.pathChanged() ||
+        'build/***'.pathChanged() ||
+        'cmd/***'.pathChanged() ||
+        'config/***'.pathChanged() ||
+        'hack/***'.pathChanged() ||
+        'hack-kni/***'.pathChanged() ||
+        'manifests/***'.pathChanged() ||
+        'pkg/***'.pathChanged() ||
+        'pkg-kni/***'.pathChanged() ||
+        'vendor/***'.pathChanged() ||
+        'go.mod'.pathChanged() ||
+        'go.sum'.pathChanged()
+      )
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: noderesourcetopology-scheduler-4-20
